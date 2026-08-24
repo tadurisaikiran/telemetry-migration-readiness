@@ -41,6 +41,8 @@ Implemented:
   GitHub CODEOWNERS, and conventional Grafana tags.
 - Optional runtime PromQL evidence from bounded Prometheus query logs and a
   provider-neutral, versioned JSONL history format.
+- Optional Tempo-validated TraceQL evidence for explicitly mapped
+  OpenTelemetry span and resource attribute migrations.
 - A pinned live Prometheus/Grafana/Sloth migration lifecycle that verifies
   predictions against runtime behavior.
 
@@ -182,6 +184,31 @@ deterministic execution count, first/last observation, origin, and evidence
 window. The window is anchored to the newest valid record in the file rather
 than the machine clock, so the same input produces the same result later. See
 [the runtime query evidence guide](docs/RUNTIME_EVIDENCE.md).
+
+## Tempo and TraceQL evidence
+
+TMR can analyze strict local TraceQL consumer manifests while asking a
+configured Tempo deployment to validate each expression with its official
+parser:
+
+```yaml
+sources:
+  tempoQueries:
+    - url: https://tempo.example.com
+      path: ./trace-queries/*.yaml
+      required: true
+      timeout: 60s
+      bearerTokenEnv: TMR_TEMPO_TOKEN
+mappings:
+  traceAttributes:
+    - scope: span
+      opentelemetry: http.request.method
+      tempo: http.method
+```
+
+OpenTelemetry and Tempo remain separate domains; similar attribute names do
+not create a dependency. Required validation, mapping, or source failures stop
+`READY`. See [the Tempo and TraceQL guide](docs/TEMPO.md).
 
 ## Optional AI explanations
 

@@ -10,6 +10,7 @@ const (
 	EvidenceMethodExplicitMapping    EvidenceMethod = "explicit_mapping"
 	EvidenceMethodUsageAPI           EvidenceMethod = "usage_api"
 	EvidenceMethodRuntimeQuery       EvidenceMethod = "runtime_query"
+	EvidenceMethodTempoValidated     EvidenceMethod = "tempo_validated_traceql"
 	EvidenceMethodTemplateResolution EvidenceMethod = "template_resolution"
 	EvidenceMethodAIInference        EvidenceMethod = "ai_inference"
 	EvidenceMethodManual             EvidenceMethod = "manual"

@@ -302,6 +302,99 @@ func TestRuntimeQueryEvidenceIsAdditiveAndFailClosed(t *testing.T) {
 	}
 }
 
+func TestTempoTraceQLUsesExplicitOTelMappingsAndFailsClosed(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/api/search" || request.URL.Query().Get("q") == "" {
+			http.Error(writer, "bad validation request", http.StatusBadRequest)
+			return
+		}
+		writer.Write([]byte(`{"traces":[]}`))
+	}))
+	defer server.Close()
+
+	root := t.TempDir()
+	queryPath := filepath.Join(root, "queries.yaml")
+	writeQuery := func(attribute string) {
+		t.Helper()
+		contents := `apiVersion: tmr.tempo/v1alpha1
+kind: TraceQueries
+queries:
+  - id: checkout
+    name: Checkout trace query
+    criticality: critical
+    expression: '{ span.` + attribute + ` = "GET" }'
+`
+		if err := os.WriteFile(queryPath, []byte(contents), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sources := config.Sources{TempoQueries: []config.TempoQuerySource{{
+		URL: server.URL, Pattern: queryPath, Required: true, Timeout: "1s", Criticality: "critical",
+	}}}
+	configuration := testConfiguration(sources)
+	configuration.Mappings.TraceAttributes = []config.TraceAttributeMapping{
+		{Scope: "span", OpenTelemetry: "http.method", Tempo: "http.method"},
+		{Scope: "span", OpenTelemetry: "http.request.method", Tempo: "http.request.method"},
+	}
+	destination := domain.Symbol{Domain: domain.DomainOpenTelemetry, Kind: domain.SymbolKindSpanAttribute, Name: "http.request.method"}
+	migration := domain.Migration{
+		APIVersion: domain.MigrationAPIVersion,
+		Kind:       domain.MigrationKind,
+		Metadata:   domain.MigrationMetadata{Name: "trace-method"},
+		Changes: []domain.Change{{
+			ID: "span-method", Kind: domain.ChangeKindSpanAttributeRename, Domain: domain.DomainOpenTelemetry,
+			From: domain.Symbol{Domain: domain.DomainOpenTelemetry, Kind: domain.SymbolKindSpanAttribute, Name: "http.method"},
+			To:   &destination,
+		}},
+	}
+
+	writeQuery("http.method")
+	blocked, _, discovery, err := Run(context.Background(), configuration, migration)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if blocked.Summary.Status != readiness.StatusBlocked || len(discovery.References) != 2 {
+		t.Fatalf("blocked = %+v discovery = %#v", blocked.Summary, discovery)
+	}
+
+	writeQuery("http.request.method")
+	ready, _, _, err := Run(context.Background(), configuration, migration)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ready.Summary.Status != readiness.StatusReady || ready.Summary.Migrated != 1 {
+		t.Fatalf("ready = %+v", ready.Summary)
+	}
+
+	configuration.Mappings.TraceAttributes = configuration.Mappings.TraceAttributes[:1]
+	incomplete, _, missingMapping, err := Run(context.Background(), configuration, migration)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if incomplete.Summary.Status != readiness.StatusIncomplete || len(missingMapping.Diagnostics) != 1 ||
+		missingMapping.Diagnostics[0].Adapter != "tempo_mapping" || !missingMapping.Diagnostics[0].Required {
+		t.Fatalf("incomplete = %+v diagnostics = %#v", incomplete.Summary, missingMapping.Diagnostics)
+	}
+}
+
+func TestOptionalTempoMappingDiagnosticIsAdvisory(t *testing.T) {
+	t.Parallel()
+
+	destination := domain.Symbol{Domain: domain.DomainOpenTelemetry, Kind: domain.SymbolKindResourceAttribute, Name: "cloud.region"}
+	migration := domain.Migration{Changes: []domain.Change{{
+		ID: "resource-region", Kind: domain.ChangeKindResourceAttributeRename, Domain: domain.DomainOpenTelemetry,
+		From: domain.Symbol{Domain: domain.DomainOpenTelemetry, Kind: domain.SymbolKindResourceAttribute, Name: "cloud.zone"},
+		To:   &destination,
+	}}}
+	configuration := config.Config{Sources: config.Sources{TempoQueries: []config.TempoQuerySource{{Required: false}}}}
+	diagnostics := traceMappingDiagnostics(configuration, migration)
+	if len(diagnostics) != 2 || diagnostics[0].Required || diagnostics[1].Required {
+		t.Fatalf("diagnostics = %#v", diagnostics)
+	}
+}
+
 func testConfiguration(sources config.Sources) config.Config {
 	return config.Config{
 		APIVersion: config.ConfigAPIVersion,

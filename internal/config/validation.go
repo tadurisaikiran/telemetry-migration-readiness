@@ -83,7 +83,7 @@ func ValidateMigration(migration domain.Migration) error {
 		}
 
 		if !isSupportedDomain(change.Domain) {
-			issues.add(path+".domain", fmt.Sprintf("unsupported domain %q; supported domains: prometheus", change.Domain))
+			issues.add(path+".domain", fmt.Sprintf("unsupported domain %q; supported domains: prometheus, opentelemetry, tempo", change.Domain))
 		}
 		if !isSupportedChangeKind(change.Kind) {
 			issues.add(path+".kind", fmt.Sprintf("unsupported change kind %q", change.Kind))
@@ -91,6 +91,9 @@ func ValidateMigration(migration domain.Migration) error {
 		}
 
 		expectedKind := expectedSymbolKind(change.Kind)
+		if !domainSupportsKind(change.Domain, expectedKind) {
+			issues.add(path+".domain", fmt.Sprintf("domain %q does not support change kind %q", change.Domain, change.Kind))
+		}
 		validateSymbol(issues, path+".from", change.From, change.Domain, expectedKind)
 		if expectedKind == domain.SymbolKindLabel && isBlank(change.From.Parent) {
 			issues.add(path+".metric", "parent metric is required for a label change")
@@ -132,11 +135,11 @@ func validateSymbol(
 		issues.add(path+".kind", fmt.Sprintf("must be %q", expectedKind))
 	}
 	if isBlank(symbol.Name) {
-		issues.add(path+"."+string(expectedKind), "is required")
+		issues.add(path+"."+symbolFieldName(expectedKind), "is required")
 	}
 
-	if expectedKind == domain.SymbolKindMetric && symbol.Parent != "" {
-		issues.add(path+".parent", "must be empty for a metric change")
+	if expectedKind != domain.SymbolKindLabel && symbol.Parent != "" {
+		issues.add(path+".parent", "must be empty for this change kind")
 	}
 }
 
@@ -145,7 +148,7 @@ func isBlank(value string) bool {
 }
 
 func isSupportedDomain(value domain.Domain) bool {
-	return value == domain.DomainPrometheus
+	return value == domain.DomainPrometheus || value == domain.DomainOpenTelemetry || value == domain.DomainTempo
 }
 
 func isSupportedChangeKind(value domain.ChangeKind) bool {
@@ -153,7 +156,11 @@ func isSupportedChangeKind(value domain.ChangeKind) bool {
 	case domain.ChangeKindMetricRename,
 		domain.ChangeKindMetricRemove,
 		domain.ChangeKindLabelRename,
-		domain.ChangeKindLabelRemove:
+		domain.ChangeKindLabelRemove,
+		domain.ChangeKindSpanAttributeRename,
+		domain.ChangeKindSpanAttributeRemove,
+		domain.ChangeKindResourceAttributeRename,
+		domain.ChangeKindResourceAttributeRemove:
 		return true
 	default:
 		return false
@@ -161,12 +168,48 @@ func isSupportedChangeKind(value domain.ChangeKind) bool {
 }
 
 func isRename(value domain.ChangeKind) bool {
-	return value == domain.ChangeKindMetricRename || value == domain.ChangeKindLabelRename
+	switch value {
+	case domain.ChangeKindMetricRename,
+		domain.ChangeKindLabelRename,
+		domain.ChangeKindSpanAttributeRename,
+		domain.ChangeKindResourceAttributeRename:
+		return true
+	default:
+		return false
+	}
 }
 
 func expectedSymbolKind(value domain.ChangeKind) domain.SymbolKind {
-	if value == domain.ChangeKindLabelRename || value == domain.ChangeKindLabelRemove {
+	switch value {
+	case domain.ChangeKindLabelRename, domain.ChangeKindLabelRemove:
 		return domain.SymbolKindLabel
+	case domain.ChangeKindSpanAttributeRename, domain.ChangeKindSpanAttributeRemove:
+		return domain.SymbolKindSpanAttribute
+	case domain.ChangeKindResourceAttributeRename, domain.ChangeKindResourceAttributeRemove:
+		return domain.SymbolKindResourceAttribute
+	default:
+		return domain.SymbolKindMetric
 	}
-	return domain.SymbolKindMetric
+}
+
+func domainSupportsKind(domainValue domain.Domain, kind domain.SymbolKind) bool {
+	switch kind {
+	case domain.SymbolKindMetric, domain.SymbolKindLabel:
+		return domainValue == domain.DomainPrometheus
+	case domain.SymbolKindSpanAttribute, domain.SymbolKindResourceAttribute:
+		return domainValue == domain.DomainOpenTelemetry || domainValue == domain.DomainTempo
+	default:
+		return false
+	}
+}
+
+func symbolFieldName(kind domain.SymbolKind) string {
+	switch kind {
+	case domain.SymbolKindMetric:
+		return "metric"
+	case domain.SymbolKindLabel:
+		return "label"
+	default:
+		return "attribute"
+	}
 }

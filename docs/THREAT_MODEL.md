@@ -21,8 +21,8 @@ Assets requiring protection include:
 
 Local migration/configuration files, dashboards, comments, descriptions,
 expressions, CODEOWNERS entries, ownership metadata, dashboard tags, runtime
-query logs, API responses, and model output are untrusted data. They never
-become instructions to TMR.
+query logs, TraceQL inventories, API responses, and model output are untrusted
+data. They never become instructions to TMR.
 
 The deterministic parsers, graph, and readiness evaluator form the safety
 boundary. Optional adapters may add evidence or diagnostics but cannot mark a
@@ -64,6 +64,12 @@ query-log decoder deliberately discards `clientIP`; TMR does not need it to
 establish a dependency. Users should still treat exported query text and rule
 paths as sensitive operational data.
 
+Tempo validation sends each configured TraceQL expression to the explicitly
+configured Tempo origin. The request may therefore disclose attribute names,
+values, and internal topology to that deployment. Bearer tokens are read only
+from named environment variables, never serialized, and are not forwarded
+across origins. Error messages omit the query string and response body.
+
 ## Decision integrity
 
 Only `internal/readiness` produces `READY`, `BLOCKED`, or `INCOMPLETE`. The AI
@@ -91,6 +97,11 @@ partially trusted.
 Runtime query input has explicit file, line, record, query, origin, and window
 limits. Time windows are anchored to the newest valid event, not wall time, to
 avoid nondeterministic results and clock-dependent safety decisions.
+
+Tempo query manifests, query counts, expressions, names, source time, HTTP
+responses, and redirects are bounded. Search uses a one-result empty historical
+interval and discards results; only parser acceptance is retained. A failed
+required validation or missing required mapping prevents `READY`.
 
 Deterministic graph traversal is cycle-safe. Parser fuzz tests and live failure
 scenarios protect against malformed inputs and fail-open regressions.

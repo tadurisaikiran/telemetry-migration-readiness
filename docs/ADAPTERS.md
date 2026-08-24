@@ -36,6 +36,17 @@ visible diagnostics. See [the Perses integration guide](PERSES.md).
 Remote and ecosystem integrations add evidence without becoming prerequisites
 for the local deterministic core.
 
+- `tempo` strictly loads versioned local TraceQL consumer manifests, validates
+  each expression through Tempo's documented Search API, and extracts only
+  exact `span.` and `resource.` attributes. Explicit one-to-one mappings add
+  separate OpenTelemetry references; names are never equated implicitly.
+
+Tempo responses, query counts, expression sizes, source duration, redirects,
+and credentials are bounded. Search results are discarded: the API call is
+used only to establish official parser acceptance. Unsupported or ambiguous
+scopes remain unresolved required evidence. See [the Tempo integration
+guide](TEMPO.md).
+
 ## Runtime evidence adapters
 
 - `runtimequeries` reads local Prometheus query-log JSONL and versioned TMR

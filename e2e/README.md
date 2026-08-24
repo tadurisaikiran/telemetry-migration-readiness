@@ -10,6 +10,7 @@ Sloth. The normal suite pins:
 | Prometheus / promtool | 3.13.2 LTS |
 | Grafana | 13.1.3 |
 | Sloth | 0.16.0 |
+| Tempo | 2.10.5 (digest-pinned) |
 
 Run it from the repository root with Docker Compose v2:
 
@@ -38,6 +39,18 @@ before an unsafe cutover and predicts readiness before a successful cutover.
 Each stack uses a fresh Prometheus data volume, so an old time series cannot
 hide a broken scenario.
 
-Pinned E2E runs on every pull request. The scheduled compatibility workflow
-tests the previous supported versions and floating upstream latest tags without
-making normal CI non-reproducible.
+The independent trace tier runs a digest-pinned Tempo and validates the full
+TraceQL lifecycle through Tempo's official Search API:
+
+```bash
+./e2e/scripts/run-tempo-e2e.sh
+```
+
+It requires a critical legacy span attribute query to report `BLOCKED`, the
+migrated query to report `READY`, and an expression rejected by Tempo's parser
+to fail closed as `INCOMPLETE`. OpenTelemetry-to-Tempo attribute mappings are
+explicit in every scenario; no name-based cross-domain match is allowed.
+
+Both pinned E2E tiers run on every pull request. The scheduled compatibility
+workflow tests previous supported versions and floating upstream latest tags
+without making normal CI non-reproducible.

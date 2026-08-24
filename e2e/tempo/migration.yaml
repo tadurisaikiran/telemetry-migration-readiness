@@ -1,0 +1,14 @@
+apiVersion: telemetry-migration/v1alpha1
+kind: Migration
+metadata:
+  name: checkout-trace-attribute
+spec:
+  description: Rename the checkout HTTP method span attribute.
+  changes:
+    - id: checkout-http-method
+      kind: span_attribute_rename
+      domain: opentelemetry
+      from:
+        attribute: http.method
+      to:
+        attribute: http.request.method

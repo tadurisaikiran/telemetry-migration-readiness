@@ -1,0 +1,7 @@
+apiVersion: tmr.tempo/v1alpha1
+kind: TraceQueries
+queries:
+  - id: checkout-http-invalid
+    name: Invalid checkout TraceQL must fail closed
+    criticality: critical
+    expression: '{ span.http.method = }'

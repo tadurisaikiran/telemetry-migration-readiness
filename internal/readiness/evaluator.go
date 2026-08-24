@@ -175,10 +175,13 @@ func symbolsMatch(reference, changed domain.Symbol) bool {
 	if reference.Domain != changed.Domain || reference.Kind != changed.Kind {
 		return false
 	}
-	if reference.Kind == domain.SymbolKindMetric {
+	if reference.Domain == domain.DomainPrometheus && reference.Kind == domain.SymbolKindMetric {
 		return metricFamilyMatch(reference.Name, changed.Name)
 	}
-	return reference.Name == changed.Name && metricFamilyMatch(reference.Parent, changed.Parent)
+	if reference.Domain == domain.DomainPrometheus && reference.Kind == domain.SymbolKindLabel {
+		return reference.Name == changed.Name && metricFamilyMatch(reference.Parent, changed.Parent)
+	}
+	return reference.Name == changed.Name && reference.Parent == changed.Parent
 }
 
 func metricFamilyMatch(reference, base string) bool {

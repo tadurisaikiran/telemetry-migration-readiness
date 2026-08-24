@@ -30,3 +30,20 @@ jobs:
 
       - name: Run pinned live lifecycle
         run: ./e2e/scripts/run-e2e.sh
+
+  trace-lifecycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run pinned Tempo TraceQL lifecycle
+        run: ./e2e/scripts/run-tempo-e2e.sh

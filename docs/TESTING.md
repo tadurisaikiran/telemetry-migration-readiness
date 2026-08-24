@@ -26,16 +26,24 @@ Integration tests prove that observed legacy queries block removal, observed
 destination-only queries do not, and an empty history cannot erase a blocker
 discovered from configured artifacts.
 
+Trace evidence has scoped/quoted attribute extraction, deduplication, mapping,
+strict-manifest, Tempo authentication, parser rejection, timeout, response
+bound, redirect, integration, exact-domain matching, and fuzz coverage. Tests
+prove that legacy OTel attributes block only through an explicit mapping and
+that a missing required mapping is `INCOMPLETE`.
+
 ## Implemented test layers
 
 The current deterministic engine has:
 
 - unit tests for every required migration validation rule;
-- valid YAML fixtures covering all four implemented change kinds;
+- valid YAML fixtures and validation tests covering all implemented metric,
+  label, span-attribute, and resource-attribute change kinds;
 - invalid YAML fixtures with exact golden diagnostics;
 - PromQL AST unit and fuzz tests;
 - CODEOWNERS and strict ownership-metadata unit and fuzz tests;
 - Prometheus query-log and TMR query-history unit and fuzz tests;
+- TraceQL attribute-scanner unit and fuzz tests plus Tempo API component tests;
 - component fixtures for Prometheus rules, PrometheusRule CRDs, Grafana, Sloth,
   and Pyrra;
 - cycle and transitive-chain graph tests;
@@ -43,7 +51,8 @@ The current deterministic engine has:
 - an exact JSON golden report for the checkout migration;
 - CLI integration tests for output and the permanent `0/1/2/3` exit contract;
 - CI checks for formatting, vetting, and race-enabled tests.
-- a pinned live Docker lifecycle against Prometheus, Grafana, and Sloth.
+- pinned live Docker lifecycles against Prometheus, Grafana, and Sloth, plus a
+  digest-pinned Tempo TraceQL validation tier.
 
 Run the local checks with:
 
@@ -94,6 +103,7 @@ Run the core and live layers with:
 ```bash
 go test -race ./...
 ./e2e/scripts/run-e2e.sh
+./e2e/scripts/run-tempo-e2e.sh
 ```
 
 See [the E2E harness guide](../e2e/README.md) for pinned versions, scenario

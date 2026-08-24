@@ -23,6 +23,8 @@ deployment is supported.
   CODEOWNERS, and conventional Grafana tags (Milestone 14).
 - Deterministic runtime query evidence from Prometheus query logs and a
   provider-neutral query-history format (Milestone 15).
+- Tempo-validated TraceQL consumers with explicit OpenTelemetry span/resource
+  attribute mappings (Milestone 16).
 - Pinned live Prometheus/Grafana/Sloth migration lifecycle.
 
 ## Current release path
@@ -34,7 +36,7 @@ deployment is supported.
 
 ## Optional integrations after the core release gate
 
-- TraceQL, LogQL, Collector configuration, MCP, and server/UI modes.
+- LogQL, Collector configuration, MCP, and server/UI modes.
 
 These additions cannot weaken the local deterministic readiness result. The
 ordering may change in response to design-user evidence; changes should be

@@ -151,6 +151,30 @@ func TestEvaluateMetricRemovalBlocksReference(t *testing.T) {
 	}
 }
 
+func TestTraceAttributeMatchingIsExactAndDomainScoped(t *testing.T) {
+	t.Parallel()
+
+	changed := domain.Symbol{Domain: domain.DomainOpenTelemetry, Kind: domain.SymbolKindSpanAttribute, Name: "http.method"}
+	for _, test := range []struct {
+		name      string
+		reference domain.Symbol
+		want      bool
+	}{
+		{name: "exact", reference: changed, want: true},
+		{name: "different scope", reference: domain.Symbol{Domain: domain.DomainOpenTelemetry, Kind: domain.SymbolKindResourceAttribute, Name: "http.method"}},
+		{name: "different domain", reference: domain.Symbol{Domain: domain.DomainTempo, Kind: domain.SymbolKindSpanAttribute, Name: "http.method"}},
+		{name: "metric suffix is not applied", reference: domain.Symbol{Domain: domain.DomainOpenTelemetry, Kind: domain.SymbolKindSpanAttribute, Name: "http.method_count"}},
+	} {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			if got := symbolsMatch(test.reference, changed); got != test.want {
+				t.Fatalf("symbolsMatch() = %t, want %t", got, test.want)
+			}
+		})
+	}
+}
+
 func evaluateForTest(t *testing.T, migration domain.Migration, discovery domain.Discovery) Result {
 	t.Helper()
 	target, err := impact.BuildGraph(discovery)

@@ -1,0 +1,7 @@
+apiVersion: tmr.tempo/v1alpha1
+kind: TraceQueries
+queries:
+  - id: checkout-http-migrated
+    name: Checkout requests using the stable HTTP attribute
+    criticality: critical
+    expression: '{ span.http.request.method = "GET" }'

@@ -17,8 +17,8 @@ The local deterministic pipeline described below is implemented today.
 3. Formal parsers take precedence over regular expressions and model inference.
 4. Missing, malformed, or unresolved required evidence fails closed.
 5. Every dependency finding retains its evidence and source location.
-6. Prometheus and OpenTelemetry are separate domains. Similar names do not
-   establish a mapping.
+6. Prometheus, OpenTelemetry, Tempo, and Loki are separate domains. Similar
+   names do not establish a mapping.
 7. External systems enter through adapters and do not shape the core model.
 8. The core remains local-first and does not phone home.
 
@@ -31,7 +31,7 @@ explicit migration or mapped Weaver diff + source configuration
 strict validation and local/remote evidence adapters
              |
              v
-official PromQL AST reference extraction
+official PromQL AST / Tempo-validated TraceQL reference extraction
              |
              v
 advisory ownership enrichment
@@ -96,6 +96,14 @@ AST analyzer. Runtime consumers are additive: the adapter never removes a
 configured consumer or interprets an absent observation as evidence of safety.
 See [the runtime query evidence guide](RUNTIME_EVIDENCE.md).
 
+`adapters/tempo` loads a strict local query inventory and submits each TraceQL
+expression to the configured Tempo Search API for official parser validation.
+Only then does `pkg/traceql` conservatively extract scoped span/resource
+attributes. Explicit mappings add parallel OpenTelemetry symbols; no name-based
+alias is inferred. Tempo remains an optional remote adapter, and its AGPL parser
+is not linked into TMR's Apache-licensed binary. See [the Tempo integration
+guide](TEMPO.md).
+
 `pkg/promql` uses Prometheus's official parser and walks the typed AST. It does
 not use substring matching to establish metric or label dependencies.
 
@@ -133,7 +141,7 @@ never mutated; simulated status is validation evidence, not current state.
 
 ## Next architectural layers
 
-- OpenTelemetry, trace, and log analysis.
+- Log and Collector configuration analysis.
 - APIs, MCP, and server/UI modes.
 - Additional live end-to-end tiers described in `TESTING.md`.
 

@@ -12,6 +12,14 @@ const (
 	ChangeKindLabelRename ChangeKind = "label_rename"
 	// ChangeKindLabelRemove removes a label without replacement.
 	ChangeKindLabelRemove ChangeKind = "label_remove"
+	// ChangeKindSpanAttributeRename renames an OpenTelemetry or Tempo span attribute.
+	ChangeKindSpanAttributeRename ChangeKind = "span_attribute_rename"
+	// ChangeKindSpanAttributeRemove removes a span attribute without replacement.
+	ChangeKindSpanAttributeRemove ChangeKind = "span_attribute_remove"
+	// ChangeKindResourceAttributeRename renames an OpenTelemetry or Tempo resource attribute.
+	ChangeKindResourceAttributeRename ChangeKind = "resource_attribute_rename"
+	// ChangeKindResourceAttributeRemove removes a resource attribute without replacement.
+	ChangeKindResourceAttributeRemove ChangeKind = "resource_attribute_remove"
 )
 
 // Change describes one telemetry contract transition. To is nil for removal

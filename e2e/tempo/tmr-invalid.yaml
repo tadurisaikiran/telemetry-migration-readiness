@@ -1,0 +1,25 @@
+apiVersion: tmr/v1alpha1
+sources:
+  tempoQueries:
+    - url: http://127.0.0.1:13200
+      path: e2e/tempo/queries-invalid.yaml
+      required: true
+      timeout: 60s
+      criticality: high
+mappings:
+  traceAttributes:
+    - scope: span
+      opentelemetry: http.method
+      tempo: http.method
+    - scope: span
+      opentelemetry: http.request.method
+      tempo: http.request.method
+analysis:
+  includeTransitiveDependencies: true
+  unresolvedReferencePolicy: error
+policy:
+  failOnCriticalLegacyConsumer: true
+  failOnCriticalUnknown: true
+  minimumBlockingCriticality: high
+output:
+  formats: [json]

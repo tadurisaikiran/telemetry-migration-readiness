@@ -49,6 +49,17 @@ type RuntimeQuerySource struct {
 	Criticality string `json:"criticality"`
 }
 
+// TempoQuerySource configures strict local TraceQL consumers whose syntax is
+// validated by a read-only Tempo Search API request.
+type TempoQuerySource struct {
+	URL            string `json:"url"`
+	Pattern        string `json:"pattern"`
+	Required       bool   `json:"required"`
+	Timeout        string `json:"timeout"`
+	BearerTokenEnv string `json:"bearerTokenEnv,omitempty"`
+	Criticality    string `json:"criticality"`
+}
+
 // Sources configures implemented local and optional remote consumer adapters.
 type Sources struct {
 	PrometheusRules []SourcePattern      `json:"prometheusRules,omitempty"`
@@ -57,6 +68,21 @@ type Sources struct {
 	Pyrra           []SourcePattern      `json:"pyrra,omitempty"`
 	PersesUsage     []PersesUsageSource  `json:"persesUsage,omitempty"`
 	RuntimeQueries  []RuntimeQuerySource `json:"runtimeQueries,omitempty"`
+	TempoQueries    []TempoQuerySource   `json:"tempoQueries,omitempty"`
+}
+
+// TraceAttributeMapping explicitly connects one OpenTelemetry attribute to
+// the exact Tempo attribute queried in the same scope.
+type TraceAttributeMapping struct {
+	Scope         string `json:"scope"`
+	OpenTelemetry string `json:"opentelemetry"`
+	Tempo         string `json:"tempo"`
+}
+
+// MappingsConfig holds explicit cross-domain mappings. Similar names never
+// create an implicit relationship.
+type MappingsConfig struct {
+	TraceAttributes []TraceAttributeMapping `json:"traceAttributes,omitempty"`
 }
 
 // AnalysisConfig controls graph behavior.
@@ -105,6 +131,7 @@ type OwnershipConfig struct {
 type Config struct {
 	APIVersion string          `json:"apiVersion"`
 	Sources    Sources         `json:"sources"`
+	Mappings   MappingsConfig  `json:"mappings,omitempty"`
 	Ownership  OwnershipConfig `json:"ownership,omitempty"`
 	Analysis   AnalysisConfig  `json:"analysis"`
 	Policy     PolicyConfig    `json:"policy"`
@@ -114,6 +141,7 @@ type Config struct {
 type configDocument struct {
 	APIVersion string             `yaml:"apiVersion"`
 	Sources    sourcesDocument    `yaml:"sources"`
+	Mappings   mappingsDocument   `yaml:"mappings"`
 	Ownership  *ownershipDocument `yaml:"ownership"`
 	Analysis   analysisDocument   `yaml:"analysis"`
 	Policy     policyDocument     `yaml:"policy"`
@@ -166,6 +194,17 @@ type sourcesDocument struct {
 	Pyrra           []sourcePatternDocument      `yaml:"pyrra"`
 	PersesUsage     []persesUsageSourceDocument  `yaml:"persesUsage"`
 	RuntimeQueries  []runtimeQuerySourceDocument `yaml:"runtimeQueries"`
+	TempoQueries    []tempoQuerySourceDocument   `yaml:"tempoQueries"`
+}
+
+type mappingsDocument struct {
+	TraceAttributes []traceAttributeMappingDocument `yaml:"traceAttributes"`
+}
+
+type traceAttributeMappingDocument struct {
+	Scope         string `yaml:"scope"`
+	OpenTelemetry string `yaml:"opentelemetry"`
+	Tempo         string `yaml:"tempo"`
 }
 
 type persesUsageSourceDocument struct {
@@ -181,6 +220,15 @@ type runtimeQuerySourceDocument struct {
 	Format      string `yaml:"format"`
 	Window      string `yaml:"window"`
 	Criticality string `yaml:"criticality"`
+}
+
+type tempoQuerySourceDocument struct {
+	URL            string `yaml:"url"`
+	Path           string `yaml:"path"`
+	Required       *bool  `yaml:"required"`
+	Timeout        string `yaml:"timeout"`
+	BearerTokenEnv string `yaml:"bearerTokenEnv"`
+	Criticality    string `yaml:"criticality"`
 }
 
 type sourcePatternDocument struct {
@@ -346,6 +394,58 @@ func ValidateConfig(config Config) error {
 			issues.add(path+".criticality", "must be low, medium, high, or critical")
 		}
 	}
+	totalSources += len(config.Sources.TempoQueries)
+	for index, source := range config.Sources.TempoQueries {
+		path := fmt.Sprintf("sources.tempoQueries[%d]", index)
+		if isBlank(source.Pattern) {
+			issues.add(path+".path", "is required")
+		}
+		parsed, err := url.Parse(source.URL)
+		if err != nil ||
+			(!strings.EqualFold(parsed.Scheme, "http") && !strings.EqualFold(parsed.Scheme, "https")) ||
+			parsed.Host == "" {
+			issues.add(path+".url", "must be an absolute http or https URL")
+		} else {
+			if parsed.User != nil {
+				issues.add(path+".url", "must not contain user information")
+			}
+			if parsed.RawQuery != "" || parsed.Fragment != "" {
+				issues.add(path+".url", "must not contain a query or fragment")
+			}
+		}
+		timeout, err := time.ParseDuration(source.Timeout)
+		if err != nil || timeout <= 0 || timeout > 2*time.Minute {
+			issues.add(path+".timeout", "must be a positive duration no greater than 2m")
+		}
+		if source.BearerTokenEnv != "" && !environmentNamePattern.MatchString(source.BearerTokenEnv) {
+			issues.add(path+".bearerTokenEnv", "must be a valid environment variable name")
+		}
+		if !validCriticality(source.Criticality) {
+			issues.add(path+".criticality", "must be low, medium, high, or critical")
+		}
+	}
+	seenOTelMappings := make(map[string]int, len(config.Mappings.TraceAttributes))
+	seenTempoMappings := make(map[string]int, len(config.Mappings.TraceAttributes))
+	for index, mapping := range config.Mappings.TraceAttributes {
+		path := fmt.Sprintf("mappings.traceAttributes[%d]", index)
+		if mapping.Scope != "span" && mapping.Scope != "resource" {
+			issues.add(path+".scope", "must be span or resource")
+		}
+		validateTraceAttributeName(issues, path+".opentelemetry", mapping.OpenTelemetry)
+		validateTraceAttributeName(issues, path+".tempo", mapping.Tempo)
+		otelKey := mapping.Scope + "\x00" + mapping.OpenTelemetry
+		if previous, exists := seenOTelMappings[otelKey]; exists {
+			issues.add(path+".opentelemetry", fmt.Sprintf("duplicates mappings.traceAttributes[%d]", previous))
+		} else {
+			seenOTelMappings[otelKey] = index
+		}
+		tempoKey := mapping.Scope + "\x00" + mapping.Tempo
+		if previous, exists := seenTempoMappings[tempoKey]; exists {
+			issues.add(path+".tempo", fmt.Sprintf("duplicates mappings.traceAttributes[%d]", previous))
+		} else {
+			seenTempoMappings[tempoKey] = index
+		}
+	}
 	if config.Ownership.Enabled {
 		if isBlank(config.Ownership.RepositoryRoot) {
 			issues.add("ownership.repositoryRoot", "is required when ownership discovery is enabled")
@@ -421,7 +521,9 @@ func normalizeConfig(document configDocument) Config {
 			Pyrra:           normalizePatterns(document.Sources.Pyrra),
 			PersesUsage:     normalizePersesUsageSources(document.Sources.PersesUsage),
 			RuntimeQueries:  normalizeRuntimeQuerySources(document.Sources.RuntimeQueries),
+			TempoQueries:    normalizeTempoQuerySources(document.Sources.TempoQueries),
 		},
+		Mappings:  normalizeMappings(document.Mappings),
 		Ownership: normalizeOwnership(document.Ownership),
 		Analysis: AnalysisConfig{
 			IncludeTransitiveDependencies: transitive,
@@ -460,6 +562,61 @@ func normalizeRuntimeQuerySources(documents []runtimeQuerySourceDocument) []Runt
 		})
 	}
 	return sources
+}
+
+func normalizeTempoQuerySources(documents []tempoQuerySourceDocument) []TempoQuerySource {
+	sources := make([]TempoQuerySource, 0, len(documents))
+	for _, document := range documents {
+		required := true
+		if document.Required != nil {
+			required = *document.Required
+		}
+		timeout := strings.TrimSpace(document.Timeout)
+		if timeout == "" {
+			timeout = "60s"
+		}
+		criticality := strings.ToLower(strings.TrimSpace(document.Criticality))
+		if criticality == "" {
+			criticality = "high"
+		}
+		sources = append(sources, TempoQuerySource{
+			URL:            strings.TrimRight(strings.TrimSpace(document.URL), "/"),
+			Pattern:        strings.TrimSpace(document.Path),
+			Required:       required,
+			Timeout:        timeout,
+			BearerTokenEnv: strings.TrimSpace(document.BearerTokenEnv),
+			Criticality:    criticality,
+		})
+	}
+	return sources
+}
+
+func normalizeMappings(document mappingsDocument) MappingsConfig {
+	mappings := make([]TraceAttributeMapping, 0, len(document.TraceAttributes))
+	for _, mapping := range document.TraceAttributes {
+		mappings = append(mappings, TraceAttributeMapping{
+			Scope:         strings.ToLower(strings.TrimSpace(mapping.Scope)),
+			OpenTelemetry: strings.TrimSpace(mapping.OpenTelemetry),
+			Tempo:         strings.TrimSpace(mapping.Tempo),
+		})
+	}
+	return MappingsConfig{TraceAttributes: mappings}
+}
+
+func validateTraceAttributeName(issues *ValidationError, path, value string) {
+	if isBlank(value) {
+		issues.add(path, "is required")
+		return
+	}
+	if len(value) > 1024 {
+		issues.add(path, "must be no greater than 1024 bytes")
+	}
+	for _, character := range value {
+		if character < 0x20 || character == 0x7f {
+			issues.add(path, "must not contain control characters")
+			return
+		}
+	}
 }
 
 func validCriticality(value string) bool {

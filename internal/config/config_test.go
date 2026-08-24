@@ -232,3 +232,77 @@ sources:
 		}
 	}
 }
+
+func TestParseConfigSupportsTempoQueriesAndExplicitTraceMappings(t *testing.T) {
+	t.Parallel()
+
+	configuration, err := ParseConfig(strings.NewReader(`apiVersion: tmr/v1alpha1
+sources:
+  tempoQueries:
+    - url: https://tempo.example.com/base/
+      path: ./trace-queries/*.yaml
+      bearerTokenEnv: TEMPO_TOKEN
+mappings:
+  traceAttributes:
+    - scope: span
+      opentelemetry: http.request.method
+      tempo: http.method
+    - scope: resource
+      opentelemetry: service.name
+      tempo: service.name
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := len(configuration.Sources.TempoQueries), 1; got != want {
+		t.Fatalf("Tempo sources = %d, want %d", got, want)
+	}
+	source := configuration.Sources.TempoQueries[0]
+	if source.URL != "https://tempo.example.com/base" || source.Pattern != "./trace-queries/*.yaml" ||
+		!source.Required || source.Timeout != "60s" || source.Criticality != "high" || source.BearerTokenEnv != "TEMPO_TOKEN" {
+		t.Fatalf("Tempo source = %#v", source)
+	}
+	if got, want := len(configuration.Mappings.TraceAttributes), 2; got != want {
+		t.Fatalf("trace mappings = %d, want %d", got, want)
+	}
+}
+
+func TestParseConfigRejectsUnsafeTempoAndTraceMappings(t *testing.T) {
+	t.Parallel()
+
+	_, err := ParseConfig(strings.NewReader(`apiVersion: tmr/v1alpha1
+sources:
+  tempoQueries:
+    - url: ftp://tempo.example.com?token=secret
+      path: ""
+      timeout: 3m
+      bearerTokenEnv: bad-name
+      criticality: urgent
+mappings:
+  traceAttributes:
+    - scope: trace
+      opentelemetry: ""
+      tempo: old
+    - scope: trace
+      opentelemetry: ""
+      tempo: old
+`))
+	if err == nil {
+		t.Fatal("ParseConfig() error = nil")
+	}
+	for _, expected := range []string{
+		"sources.tempoQueries[0].url",
+		"sources.tempoQueries[0].path",
+		"sources.tempoQueries[0].timeout",
+		"sources.tempoQueries[0].bearerTokenEnv",
+		"sources.tempoQueries[0].criticality",
+		"mappings.traceAttributes[0].scope",
+		"mappings.traceAttributes[0].opentelemetry",
+		"mappings.traceAttributes[1].opentelemetry: duplicates",
+		"mappings.traceAttributes[1].tempo: duplicates",
+	} {
+		if !strings.Contains(err.Error(), expected) {
+			t.Errorf("error = %q, want %q", err, expected)
+		}
+	}
+}
