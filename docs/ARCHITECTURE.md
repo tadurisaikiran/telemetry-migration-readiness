@@ -106,10 +106,17 @@ unknown fields are rejected, and rendering repeats the deterministic status on
 both sides of provider-authored prose. This package cannot call the readiness
 evaluator with modified evidence.
 
+`internal/remediation` is a separate candidate-only boundary. It exposes only
+confirmed direct local Prometheus-rule YAML and Grafana JSON expressions as
+targets. Provider proposals cannot select a source path or locator. TMR finds
+one exact scalar, changes an in-memory artifact, reparses it through the owning
+adapter, replaces that source's discovery in memory, rebuilds the graph, and
+reruns the same readiness policy. The source file and authoritative result are
+never mutated; simulated status is validation evidence, not current state.
+
 ## Next architectural layers
 
 - OpenTelemetry, trace, and log analysis.
-- Deterministically validated AI remediation.
 - Additional runtime query evidence, APIs, MCP, and server/UI modes.
 - Additional live end-to-end tiers described in `TESTING.md`.
 

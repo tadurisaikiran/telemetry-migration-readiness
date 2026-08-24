@@ -31,16 +31,22 @@ func Run(
 	if err != nil {
 		return readiness.Result{}, nil, domain.Discovery{}, err
 	}
-	result, err := readiness.Evaluate(migration, discovery, dependencyGraph, readiness.Policy{
-		FailOnCriticalLegacyConsumer: configuration.Policy.FailOnCriticalLegacyConsumer,
-		FailOnCriticalUnknown:        configuration.Policy.FailOnCriticalUnknown,
-		MinimumBlockingCriticality:   domain.Criticality(configuration.Policy.MinimumBlockingCriticality),
-		IncludeTransitive:            configuration.Analysis.IncludeTransitiveDependencies,
-	})
+	result, err := readiness.Evaluate(migration, discovery, dependencyGraph, ReadinessPolicy(configuration))
 	if err != nil {
 		return readiness.Result{}, nil, domain.Discovery{}, fmt.Errorf("evaluate readiness: %w", err)
 	}
 	return result, dependencyGraph, discovery, nil
+}
+
+// ReadinessPolicy converts validated configuration into the exact policy used
+// by Run. Candidate reanalysis calls this same function to avoid policy drift.
+func ReadinessPolicy(configuration config.Config) readiness.Policy {
+	return readiness.Policy{
+		FailOnCriticalLegacyConsumer: configuration.Policy.FailOnCriticalLegacyConsumer,
+		FailOnCriticalUnknown:        configuration.Policy.FailOnCriticalUnknown,
+		MinimumBlockingCriticality:   domain.Criticality(configuration.Policy.MinimumBlockingCriticality),
+		IncludeTransitive:            configuration.Analysis.IncludeTransitiveDependencies,
+	}
 }
 
 // Discover runs configured adapters and constructs the dependency graph.

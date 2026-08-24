@@ -18,6 +18,7 @@ import (
 	"github.com/tadurisaikiran/telemetry-migration-readiness/internal/explanation"
 	"github.com/tadurisaikiran/telemetry-migration-readiness/internal/graph"
 	"github.com/tadurisaikiran/telemetry-migration-readiness/internal/readiness"
+	"github.com/tadurisaikiran/telemetry-migration-readiness/internal/remediation"
 	"github.com/tadurisaikiran/telemetry-migration-readiness/internal/report"
 )
 
@@ -157,6 +158,93 @@ func runAdvise(ctx context.Context, args []string, stdout, stderr io.Writer) int
 		return 1
 	}
 	if err := explanation.Render(stdout, request, response); err != nil {
+		fmt.Fprintf(stderr, "Error: %v\n", err)
+		return 1
+	}
+	return readinessExitCode(result.Summary.Status)
+}
+
+func runRemediate(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	flags := flag.NewFlagSet("remediate", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	configPath := flags.String("config", "", "path to a TMR YAML configuration")
+	migrationPath := flags.String("migration", "", "path to a migration YAML manifest")
+	weaverDiffPath := flags.String("weaver-diff", "", "path to a Weaver registry diff JSON document")
+	weaverMappingPath := flags.String("weaver-mapping", "", "path to an explicit Weaver backend mapping")
+	providerCommand := flags.String("ai-command", "", "local AI provider executable")
+	providerTimeout := flags.Duration("ai-timeout", 30*time.Second, "AI provider timeout (maximum 2m)")
+	var providerArgs stringListFlag
+	flags.Var(&providerArgs, "ai-arg", "argument passed directly to the AI provider executable (repeatable)")
+	if err := flags.Parse(args); err != nil {
+		return flagExitCode(err)
+	}
+	if flags.NArg() != 0 || *configPath == "" || *providerCommand == "" {
+		fmt.Fprintln(stderr, "remediate requires --config, one change source, and --ai-command and accepts no positional arguments")
+		return 1
+	}
+	if *providerTimeout <= 0 || *providerTimeout > 2*time.Minute {
+		fmt.Fprintln(stderr, "--ai-timeout must be positive and no greater than 2m")
+		return 1
+	}
+	if *migrationPath != "" && (*weaverDiffPath != "" || *weaverMappingPath != "") {
+		fmt.Fprintln(stderr, "--migration and --weaver-diff/--weaver-mapping are mutually exclusive")
+		return 1
+	}
+	if *migrationPath == "" && (*weaverDiffPath == "" || *weaverMappingPath == "") {
+		fmt.Fprintln(stderr, "remediate requires --migration or both --weaver-diff and --weaver-mapping")
+		return 1
+	}
+
+	configuration, err := config.LoadConfig(ctx, *configPath)
+	if err != nil {
+		fmt.Fprintf(stderr, "Error: %v\n", err)
+		return 1
+	}
+	migration, err := loadSelectedMigration(ctx, *migrationPath, *weaverDiffPath, *weaverMappingPath)
+	if err != nil {
+		fmt.Fprintf(stderr, "Error: %v\n", err)
+		if isWeaverIncomplete(err) {
+			return 3
+		}
+		return 1
+	}
+	result, _, discovery, err := analysis.Run(ctx, configuration, migration)
+	if err != nil {
+		fmt.Fprintf(stderr, "Error: %v\n", err)
+		return 1
+	}
+	request, err := remediation.BuildRequest(result)
+	if err != nil {
+		fmt.Fprintf(stderr, "Error: %v\n", err)
+		return 1
+	}
+	if len(request.Targets) == 0 {
+		fmt.Fprintln(stdout, "No confirmed direct local Prometheus-rule or Grafana expression is patchable for this migration.")
+		fmt.Fprintf(stdout, "Current authoritative status remains: %s\n", result.Summary.Status)
+		return readinessExitCode(result.Summary.Status)
+	}
+	response, err := (remediation.CommandClient{
+		Path:    *providerCommand,
+		Args:    providerArgs,
+		Timeout: *providerTimeout,
+	}).Propose(ctx, request)
+	if err != nil {
+		fmt.Fprintf(stderr, "Error: %v\n", err)
+		return 1
+	}
+	candidates, err := remediation.Validate(
+		ctx,
+		request,
+		response,
+		migration,
+		discovery,
+		analysis.ReadinessPolicy(configuration),
+	)
+	if err != nil {
+		fmt.Fprintf(stderr, "Error: %v\n", err)
+		return 1
+	}
+	if err := remediation.Render(stdout, request, candidates); err != nil {
 		fmt.Fprintf(stderr, "Error: %v\n", err)
 		return 1
 	}

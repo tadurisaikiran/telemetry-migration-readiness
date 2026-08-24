@@ -88,9 +88,22 @@ distinction and must not turn explanation text into executable commands.
 
 The read-only agent cannot write files, open pull requests, call production
 Grafana/Prometheus mutation APIs, or push branches. Future candidate remediation
-must use a separate protocol and pass deterministic syntax and dependency
-validation before it can be presented as a validated candidate. Direct
-production modification remains out of scope.
+uses a separate protocol and must pass deterministic syntax, artifact, and
+dependency validation before presentation.
+
+Candidate remediation changes exactly one expression scalar in an in-memory
+copy. The provider cannot choose a path or locator. TMR requires the proposed
+`beforeExpression` to equal deterministic evidence, parses the replacement with
+the official PromQL parser, proves the legacy symbol is absent and destination
+present, reparses the artifact, rebuilds the graph, and reruns readiness. It
+does not write the candidate. A simulated `READY` result does not change the
+current status.
+
+These checks do not prove semantic equivalence beyond telemetry references. A
+syntactically valid query can change aggregation, ranges, thresholds, or label
+logic. Every candidate therefore requires human review and independent tests.
+After any manual edit, rerun `tmr analyze`; do not rely on an earlier simulation.
+Direct production modification remains out of scope.
 
 ## Reporting vulnerabilities
 

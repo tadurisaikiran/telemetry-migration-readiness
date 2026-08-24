@@ -27,13 +27,16 @@ Implemented:
 - Cycle-safe transitive dependency graphs through recording rules.
 - Fail-closed `READY`, `BLOCKED`, and `INCOMPLETE` decisions.
 - Console, versioned JSON, Markdown, and graph JSON output.
-- `analyze`, `advise`, `validate`, `explain`, and `graph` CLI commands.
+- `analyze`, `advise`, `remediate`, `validate`, `explain`, and `graph` CLI
+  commands.
 - Optional OpenTelemetry Weaver V1/V2 registry-diff import with mandatory,
   explicit Prometheus backend mappings.
 - Optional Perses metrics-usage HTTP evidence for dashboards, recording rules,
   alert rules, partial metrics, and pending usage.
 - Optional read-only AI explanations through a provider-neutral local process;
   deterministic readiness remains authoritative.
+- Candidate-only AI remediation for local Prometheus YAML and Grafana JSON,
+  validated by parsing, adapter reload, graph rebuild, and readiness reanalysis.
 - A pinned live Prometheus/Grafana/Sloth migration lifecycle that verifies
   predictions against runtime behavior.
 
@@ -166,6 +169,24 @@ return a readiness status or a patch. `advise` preserves the deterministic
 exit code, so a useful explanation of a blocked migration still exits `2`.
 See [the AI explanation protocol](docs/AI_AGENT.md) and
 [threat model](docs/THREAT_MODEL.md).
+
+## Validated candidate remediation
+
+An explicit provider can propose a replacement for a confirmed local legacy
+expression:
+
+```bash
+tmr remediate \
+  --config ./tmr.yaml \
+  --migration ./migration.yaml \
+  --ai-command ./my-tmr-ai-provider
+```
+
+TMR labels output as a validated candidate only after the official PromQL
+parser proves the legacy reference is gone and the destination is present, the
+in-memory YAML or Grafana JSON artifact reparses through its adapter, and the
+dependency graph/readiness engine succeeds on the simulated artifact. It never
+writes the source file. See [the remediation protocol](docs/REMEDIATION.md).
 
 ## Design principles
 

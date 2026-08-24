@@ -16,6 +16,7 @@ const usageText = `Telemetry Migration Readiness
 Usage:
   tmr analyze --config <path> (--migration <path> | --weaver-diff <path> --weaver-mapping <path>) [--format console|json|markdown]
   tmr advise --config <path> (--migration <path> | --weaver-diff <path> --weaver-mapping <path>) --question <text> --ai-command <executable>
+  tmr remediate --config <path> (--migration <path> | --weaver-diff <path> --weaver-mapping <path>) --ai-command <executable>
   tmr validate --migration <path>
   tmr validate --weaver-diff <path> --weaver-mapping <path>
   tmr validate --config <path>
@@ -25,6 +26,7 @@ Usage:
 Commands:
   analyze   Analyze migration readiness
   advise    Request an optional, read-only AI explanation of deterministic evidence
+  remediate Request deterministically validated candidate patches without applying them
   validate  Validate configuration and migration manifests
   explain   Explain dependency paths for one Prometheus metric
   graph     Export the dependency graph as JSON
@@ -45,6 +47,8 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return runAnalyze(ctx, args[1:], stdout, stderr)
 	case "advise":
 		return runAdvise(ctx, args[1:], stdout, stderr)
+	case "remediate":
+		return runRemediate(ctx, args[1:], stdout, stderr)
 	case "validate":
 		return runValidate(ctx, args[1:], stdout, stderr)
 	case "explain":

@@ -122,4 +122,6 @@ Good read-only questions include:
 - Explain the dependency path to a transitive blocker.
 - What deterministic evidence is missing?
 
-Candidate patches belong to Milestone 13 and are not accepted by this protocol.
+Candidate patches use a separate, narrower protocol described in
+[REMEDIATION.md](REMEDIATION.md). They are not accepted by the read-only
+explanation response.

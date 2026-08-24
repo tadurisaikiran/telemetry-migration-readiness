@@ -9,6 +9,12 @@ oversized output are bounded, secrets are redacted, terminal controls are
 removed, stable risk ordering is asserted, and CLI tests prove that model prose
 cannot change readiness exit codes.
 
+Candidate remediation adds independent query, YAML, dashboard, and full graph
+tests. Adversarial cases cover invalid PromQL, retained legacy references,
+missing destinations, secret-like provider text, duplicate or unknown targets,
+ambiguous artifact scalars, response status/patch claims, timeouts, oversized
+process output, and proof that source files remain byte-for-byte unchanged.
+
 ## Implemented test layers
 
 The current deterministic engine has:

@@ -7,16 +7,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/tadurisaikiran/telemetry-migration-readiness/internal/agentprocess"
 )
 
 const (
 	defaultProviderTimeout = 30 * time.Second
 	maxRequestBytes        = 8 << 20
 	maxResponseBytes       = 1 << 20
-	maxProviderErrorBytes  = 64 << 10
 )
 
 // Client is the provider-neutral read-only explanation interface.
@@ -51,32 +51,18 @@ func (client CommandClient) Explain(ctx context.Context, request Request) (Respo
 	if timeout <= 0 {
 		timeout = defaultProviderTimeout
 	}
-	providerContext, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	command := exec.CommandContext(providerContext, client.Path, client.Args...)
-	command.Stdin = bytes.NewReader(contents)
-	stdout := newCappedBuffer(maxResponseBytes)
-	stderr := newCappedBuffer(maxProviderErrorBytes)
-	command.Stdout = stdout
-	command.Stderr = stderr
-	if err := command.Run(); err != nil {
-		if errors.Is(providerContext.Err(), context.DeadlineExceeded) {
-			return Response{}, fmt.Errorf("AI provider timed out after %s", timeout)
-		}
-		message := strings.TrimSpace(stderr.String())
-		if message != "" {
-			return Response{}, fmt.Errorf("AI provider failed: %w: %s", err, Redact(message))
-		}
-		return Response{}, fmt.Errorf("AI provider failed: %w", err)
+	output, err := (agentprocess.Command{
+		Path:           client.Path,
+		Args:           client.Args,
+		Timeout:        timeout,
+		MaxInputBytes:  maxRequestBytes,
+		MaxOutputBytes: maxResponseBytes,
+		Sanitize:       Redact,
+	}).Run(ctx, contents)
+	if err != nil {
+		return Response{}, err
 	}
-	if stdout.Exceeded() {
-		return Response{}, fmt.Errorf("AI provider response exceeds the %d-byte limit", maxResponseBytes)
-	}
-	if stderr.Exceeded() {
-		return Response{}, fmt.Errorf("AI provider error output exceeds the %d-byte limit", maxProviderErrorBytes)
-	}
-
-	response, err := decodeResponse(bytes.NewReader(stdout.Bytes()))
+	response, err := decodeResponse(bytes.NewReader(output))
 	if err != nil {
 		return Response{}, err
 	}
@@ -154,41 +140,4 @@ func validateResponse(response Response, request Request) error {
 		}
 	}
 	return nil
-}
-
-type cappedBuffer struct {
-	buffer   bytes.Buffer
-	limit    int
-	exceeded bool
-}
-
-func newCappedBuffer(limit int) *cappedBuffer {
-	return &cappedBuffer{limit: limit}
-}
-
-func (buffer *cappedBuffer) Write(contents []byte) (int, error) {
-	originalLength := len(contents)
-	remaining := buffer.limit - buffer.buffer.Len()
-	if remaining <= 0 {
-		buffer.exceeded = buffer.exceeded || originalLength != 0
-		return originalLength, nil
-	}
-	if len(contents) > remaining {
-		buffer.exceeded = true
-		contents = contents[:remaining]
-	}
-	_, _ = buffer.buffer.Write(contents)
-	return originalLength, nil
-}
-
-func (buffer *cappedBuffer) Bytes() []byte {
-	return buffer.buffer.Bytes()
-}
-
-func (buffer *cappedBuffer) String() string {
-	return buffer.buffer.String()
-}
-
-func (buffer *cappedBuffer) Exceeded() bool {
-	return buffer.exceeded
 }

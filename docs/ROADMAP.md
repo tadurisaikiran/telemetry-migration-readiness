@@ -17,6 +17,8 @@ deployment is supported.
   (Milestone 11).
 - Provider-neutral, read-only AI explanation over redacted deterministic
   evidence (Milestone 12).
+- Candidate PromQL remediation for Prometheus rule YAML and Grafana dashboard
+  JSON with adapter reparse and full graph/readiness reanalysis (Milestone 13).
 - Pinned live Prometheus/Grafana/Sloth migration lifecycle.
 
 ## Current release path
@@ -28,7 +30,6 @@ deployment is supported.
 
 ## Optional integrations after the core release gate
 
-- Deterministically validated candidate AI remediation.
 - CODEOWNERS, repository metadata, and dashboard ownership inference.
 - Runtime query evidence.
 - TraceQL, LogQL, Collector configuration, MCP, and server/UI modes.

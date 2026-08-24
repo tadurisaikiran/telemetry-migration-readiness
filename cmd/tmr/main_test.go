@@ -252,6 +252,59 @@ func TestAdviseRequiresExplicitProvider(t *testing.T) {
 	}
 }
 
+func TestRemediateCLIValidatesCandidateWithoutWritingSource(t *testing.T) {
+	t.Parallel()
+
+	root := filepath.Clean(filepath.Join("..", ".."))
+	rulesPath := filepath.Join(root, "examples", "checkout-migration", "prometheus", "rules.yaml")
+	before, err := os.ReadFile(rulesPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	command := exec.Command(os.Args[0], "-test.run=TestCLIHelperProcess", "--",
+		"remediate",
+		"--config", "examples/checkout-migration/tmr.yaml",
+		"--migration", "examples/checkout-migration/migration.yaml",
+		"--ai-command", os.Args[0],
+		"--ai-arg=-test.run=TestCLIRemediationProviderHelper",
+	)
+	command.Dir = root
+	command.Env = append(os.Environ(), "TMR_CLI_HELPER=1", "TMR_CLI_REMEDIATION_HELPER=1")
+	output, err := command.Output()
+	exitError, ok := err.(*exec.ExitError)
+	if !ok {
+		t.Fatalf("error = %v, want blocked exit code 2", err)
+	}
+	if exitError.ExitCode() != 2 {
+		t.Fatalf("exit code = %d, stderr = %q", exitError.ExitCode(), exitError.Stderr)
+	}
+	for _, expected := range []string{"VALIDATED CANDIDATE", "NO FILES WERE MODIFIED", "Current authoritative status remains: BLOCKED"} {
+		if !strings.Contains(string(output), expected) {
+			t.Fatalf("output missing %q: %s", expected, output)
+		}
+	}
+	after, err := os.ReadFile(rulesPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("remediate modified source rules")
+	}
+}
+
+func TestRemediateRequiresExplicitProvider(t *testing.T) {
+	t.Parallel()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	exitCode := run(context.Background(), []string{
+		"remediate", "--config", "tmr.yaml", "--migration", "migration.yaml",
+	}, &stdout, &stderr)
+	if exitCode != 1 || !strings.Contains(stderr.String(), "--ai-command") {
+		t.Fatalf("exit = %d, stderr = %q", exitCode, stderr.String())
+	}
+}
+
 func TestCLIAIProviderHelper(t *testing.T) {
 	if os.Getenv("TMR_CLI_AI_HELPER") != "1" {
 		return
@@ -283,6 +336,50 @@ func TestCLIAIProviderHelper(t *testing.T) {
 			"consumerId": request.Findings[0].Consumer.ID,
 			"action":     "Migrate this confirmed legacy consumer.",
 			"rationale":  "TMR ranked it first from deterministic criticality and dependency evidence.",
+		}},
+	}
+	if err := json.NewEncoder(os.Stdout).Encode(response); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
+	os.Exit(0)
+}
+
+func TestCLIRemediationProviderHelper(t *testing.T) {
+	if os.Getenv("TMR_CLI_REMEDIATION_HELPER") != "1" {
+		return
+	}
+	contents, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
+	var request struct {
+		Targets []struct {
+			ID               string `json:"id"`
+			BeforeExpression string `json:"beforeExpression"`
+			From             struct {
+				Name string `json:"name"`
+			} `json:"from"`
+			To struct {
+				Name string `json:"name"`
+			} `json:"to"`
+		} `json:"targets"`
+	}
+	if err := json.Unmarshal(contents, &request); err != nil || len(request.Targets) == 0 {
+		fmt.Fprintln(os.Stderr, "invalid remediation request")
+		os.Exit(2)
+	}
+	target := request.Targets[0]
+	after := strings.ReplaceAll(target.BeforeExpression, target.From.Name, target.To.Name)
+	response := map[string]any{
+		"schemaVersion": "tmr-ai-remediation-response/v1alpha1",
+		"candidates": []map[string]any{{
+			"id":               "fixture-candidate",
+			"targetId":         target.ID,
+			"beforeExpression": target.BeforeExpression,
+			"afterExpression":  after,
+			"rationale":        "Replace the confirmed legacy selector with the explicit migration destination.",
 		}},
 	}
 	if err := json.NewEncoder(os.Stdout).Encode(response); err != nil {
