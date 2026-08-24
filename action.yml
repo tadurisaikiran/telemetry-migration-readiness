@@ -53,7 +53,7 @@ runs:
 
     - name: Post pull-request summary
       if: always() && github.event_name == 'pull_request' && inputs.comment == 'true'
-      uses: actions/github-script@v8
+      uses: actions/github-script@v9
       env:
         TMR_REPORT_PATH: ${{ steps.analyze.outputs.report }}
       with:
