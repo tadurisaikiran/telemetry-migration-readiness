@@ -19,6 +19,8 @@ deployment is supported.
   evidence (Milestone 12).
 - Candidate PromQL remediation for Prometheus rule YAML and Grafana dashboard
   JSON with adapter reparse and full graph/readiness reanalysis (Milestone 13).
+- Advisory consumer ownership discovery from strict TMR metadata, GitHub
+  CODEOWNERS, and conventional Grafana tags (Milestone 14).
 - Pinned live Prometheus/Grafana/Sloth migration lifecycle.
 
 ## Current release path
@@ -30,7 +32,6 @@ deployment is supported.
 
 ## Optional integrations after the core release gate
 
-- CODEOWNERS, repository metadata, and dashboard ownership inference.
 - Runtime query evidence.
 - TraceQL, LogQL, Collector configuration, MCP, and server/UI modes.
 

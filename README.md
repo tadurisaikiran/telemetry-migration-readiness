@@ -37,6 +37,8 @@ Implemented:
   deterministic readiness remains authoritative.
 - Candidate-only AI remediation for local Prometheus YAML and Grafana JSON,
   validated by parsing, adapter reload, graph rebuild, and readiness reanalysis.
+- Optional advisory ownership discovery from explicit repository metadata,
+  GitHub CODEOWNERS, and conventional Grafana tags.
 - A pinned live Prometheus/Grafana/Sloth migration lifecycle that verifies
   predictions against runtime behavior.
 
@@ -149,6 +151,14 @@ sources:
 
 The adapter consumes the documented API only; Perses is not a TMR dependency.
 See [the Perses metrics-usage integration guide](docs/PERSES.md).
+
+## Consumer ownership
+
+An opt-in `ownership` section can enrich blockers and uncertainties from
+explicit TMR metadata, GitHub CODEOWNERS, and Grafana `team:`/`owner:` tags.
+Ownership provenance and ambiguity remain visible in JSON and optional AI
+explanations, but ownership never changes readiness. See
+[the ownership discovery guide](docs/OWNERSHIP.md).
 
 ## Optional AI explanations
 

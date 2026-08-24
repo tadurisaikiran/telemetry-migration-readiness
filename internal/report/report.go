@@ -10,7 +10,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/tadurisaikiran/telemetry-migration-readiness/internal/domain"
 	"github.com/tadurisaikiran/telemetry-migration-readiness/internal/graph"
+	"github.com/tadurisaikiran/telemetry-migration-readiness/internal/ownership"
 	"github.com/tadurisaikiran/telemetry-migration-readiness/internal/readiness"
 )
 
@@ -50,6 +52,9 @@ func Console(writer io.Writer, result readiness.Result) error {
 		fmt.Fprintln(&output, "\nBLOCKERS")
 		for _, finding := range blockers {
 			fmt.Fprintf(&output, "  - %s [%s] (%s)\n", finding.name, finding.changeID, formatLocation(finding.file, finding.line))
+			if finding.owner != "" {
+				fmt.Fprintf(&output, "    Owner: %s\n", finding.owner)
+			}
 			if finding.path != "" {
 				fmt.Fprintf(&output, "    Path: %s\n", finding.path)
 			}
@@ -61,6 +66,9 @@ func Console(writer io.Writer, result readiness.Result) error {
 		fmt.Fprintln(&output, "\nUNCERTAIN")
 		for _, finding := range uncertain {
 			fmt.Fprintf(&output, "  - %s [%s] (%s)\n", finding.name, finding.changeID, formatLocation(finding.file, finding.line))
+			if finding.owner != "" {
+				fmt.Fprintf(&output, "    Owner: %s\n", finding.owner)
+			}
 		}
 	}
 
@@ -109,6 +117,9 @@ func Markdown(writer io.Writer, result readiness.Result) error {
 		fmt.Fprintf(&output, "\n## %s\n", section.title)
 		for _, item := range items {
 			fmt.Fprintf(&output, "\n- **%s** (`%s`) — %s\n", item.name, item.changeID, formatLocation(item.file, item.line))
+			if item.owner != "" {
+				fmt.Fprintf(&output, "  - Owner: %s\n", item.owner)
+			}
 			if item.path != "" {
 				fmt.Fprintf(&output, "  - Dependency path: `%s`\n", item.path)
 			}
@@ -148,6 +159,7 @@ type finding struct {
 	file     string
 	line     int
 	path     string
+	owner    string
 }
 
 func findings(result readiness.Result, classification readiness.Classification) []finding {
@@ -167,6 +179,7 @@ func findings(result readiness.Result, classification readiness.Classification) 
 				file:     consumer.Consumer.Source.File,
 				line:     consumer.Consumer.Source.Line,
 				path:     path,
+				owner:    ownerLabel(consumer.Consumer),
 			})
 		}
 	}
@@ -177,6 +190,20 @@ func findings(result readiness.Result, classification readiness.Classification) 
 		return resultFindings[i].name < resultFindings[j].name
 	})
 	return resultFindings
+}
+
+func ownerLabel(consumer domain.Consumer) string {
+	if consumer.Owner != nil {
+		return consumer.Owner.Name
+	}
+	candidates := ownership.Candidates(consumer)
+	if len(candidates) != 0 {
+		return "ambiguous: " + strings.Join(candidates, ", ")
+	}
+	if ownership.Unassigned(consumer) {
+		return "unassigned by CODEOWNERS"
+	}
+	return ""
 }
 
 func formatLocation(file string, line int) string {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -147,6 +148,70 @@ func TestPersesUsageMissingBearerTokenIsIncomplete(t *testing.T) {
 	}
 	if len(result.Diagnostics) != 1 || !strings.Contains(result.Diagnostics[0].Message, "unset or empty") {
 		t.Fatalf("diagnostics = %#v", result.Diagnostics)
+	}
+}
+
+func TestOwnershipEnrichmentDoesNotChangeReadiness(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	rulesPath := filepath.Join(root, "monitoring", "rules.yaml")
+	if err := os.MkdirAll(filepath.Dir(rulesPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(rulesPath, []byte(`groups:
+  - name: checkout
+    rules:
+      - alert: LegacyMetricStillUsed
+        expr: old_metric > 0
+        labels: {severity: critical}
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	codeownersPath := filepath.Join(root, ".github", "CODEOWNERS")
+	if err := os.MkdirAll(filepath.Dir(codeownersPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(codeownersPath, []byte("* @telemetry-platform\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	configuration := testConfiguration(config.Sources{PrometheusRules: []config.SourcePattern{{
+		Pattern:  rulesPath,
+		Required: true,
+	}}})
+	migration := mustParseRemovalMigration(t)
+	withoutOwnership, _, _, err := Run(context.Background(), configuration, migration)
+	if err != nil {
+		t.Fatal(err)
+	}
+	configuration.Ownership = config.OwnershipConfig{
+		Enabled:        true,
+		RepositoryRoot: root,
+		Codeowners:     config.CodeownersConfig{Enabled: true},
+	}
+	withOwnership, _, discovery, err := Run(context.Background(), configuration, migration)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if withOwnership.Summary != withoutOwnership.Summary {
+		t.Fatalf("summary changed with ownership: before=%+v after=%+v", withoutOwnership.Summary, withOwnership.Summary)
+	}
+	if len(discovery.Consumers) != 1 || discovery.Consumers[0].Owner == nil || discovery.Consumers[0].Owner.Name != "@telemetry-platform" {
+		t.Fatalf("consumers = %#v", discovery.Consumers)
+	}
+	if err := os.WriteFile(codeownersPath, []byte("!invalid/** @owner\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	withInvalidOwnership, _, invalidDiscovery, err := Run(context.Background(), configuration, migration)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if withInvalidOwnership.Summary != withoutOwnership.Summary {
+		t.Fatalf("invalid ownership changed readiness: before=%+v after=%+v", withoutOwnership.Summary, withInvalidOwnership.Summary)
+	}
+	if len(invalidDiscovery.Diagnostics) != 1 || invalidDiscovery.Diagnostics[0].Required {
+		t.Fatalf("ownership diagnostics = %#v", invalidDiscovery.Diagnostics)
 	}
 }
 

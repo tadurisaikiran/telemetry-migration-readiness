@@ -37,7 +37,7 @@ func TestRenderersPreserveStatusEvidenceAndPaths(t *testing.T) {
 			if err := render(&output, result); err != nil {
 				t.Fatalf("render error = %v", err)
 			}
-			for _, expected := range []string{"BLOCKED", "CheckoutLatencyHigh", "checkout_request_duration_seconds", "checkout:p95_latency"} {
+			for _, expected := range []string{"BLOCKED", "CheckoutLatencyHigh", "Checkout Platform", "checkout_request_duration_seconds", "checkout:p95_latency"} {
 				if !strings.Contains(output.String(), expected) {
 					t.Errorf("output does not contain %q:\n%s", expected, output.String())
 				}
@@ -82,6 +82,7 @@ func fixtureResult() readiness.Result {
 		Name:        "CheckoutLatencyHigh",
 		Source:      domain.SourceLocation{File: "rules/checkout.yaml", Line: 12},
 		Criticality: domain.CriticalityCritical,
+		Owner:       &domain.Owner{Name: "Checkout Platform", Email: "checkout@example.com"},
 	}
 	oldSymbol := domain.Symbol{Domain: domain.DomainPrometheus, Kind: domain.SymbolKindMetric, Name: "checkout_request_duration_seconds"}
 	newSymbol := domain.Symbol{Domain: domain.DomainPrometheus, Kind: domain.SymbolKindMetric, Name: "checkout_server_request_duration_seconds"}

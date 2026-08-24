@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -62,21 +63,86 @@ type OutputConfig struct {
 	Formats []string `json:"formats"`
 }
 
+// CodeownersConfig controls repository-local GitHub CODEOWNERS discovery.
+// Path is repository-relative; an empty path uses GitHub's documented search
+// order: .github/CODEOWNERS, CODEOWNERS, then docs/CODEOWNERS.
+type CodeownersConfig struct {
+	Enabled bool   `json:"enabled"`
+	Path    string `json:"path,omitempty"`
+}
+
+// OwnershipMetadataSource identifies one advisory repository metadata file or
+// glob. Ownership diagnostics are always non-blocking.
+type OwnershipMetadataSource struct {
+	Pattern string `json:"pattern"`
+}
+
+// OwnershipConfig controls advisory owner enrichment. Ownership evidence is
+// deliberately separate from consumer sources and cannot affect readiness.
+type OwnershipConfig struct {
+	Enabled        bool                      `json:"enabled"`
+	RepositoryRoot string                    `json:"repositoryRoot,omitempty"`
+	Metadata       []OwnershipMetadataSource `json:"metadata,omitempty"`
+	Codeowners     CodeownersConfig          `json:"codeowners"`
+	DashboardTags  bool                      `json:"dashboardTags"`
+}
+
 // Config is the validated TMR analysis configuration.
 type Config struct {
-	APIVersion string         `json:"apiVersion"`
-	Sources    Sources        `json:"sources"`
-	Analysis   AnalysisConfig `json:"analysis"`
-	Policy     PolicyConfig   `json:"policy"`
-	Output     OutputConfig   `json:"output"`
+	APIVersion string          `json:"apiVersion"`
+	Sources    Sources         `json:"sources"`
+	Ownership  OwnershipConfig `json:"ownership,omitempty"`
+	Analysis   AnalysisConfig  `json:"analysis"`
+	Policy     PolicyConfig    `json:"policy"`
+	Output     OutputConfig    `json:"output"`
 }
 
 type configDocument struct {
-	APIVersion string           `yaml:"apiVersion"`
-	Sources    sourcesDocument  `yaml:"sources"`
-	Analysis   analysisDocument `yaml:"analysis"`
-	Policy     policyDocument   `yaml:"policy"`
-	Output     outputDocument   `yaml:"output"`
+	APIVersion string             `yaml:"apiVersion"`
+	Sources    sourcesDocument    `yaml:"sources"`
+	Ownership  *ownershipDocument `yaml:"ownership"`
+	Analysis   analysisDocument   `yaml:"analysis"`
+	Policy     policyDocument     `yaml:"policy"`
+	Output     outputDocument     `yaml:"output"`
+}
+
+type ownershipDocument struct {
+	RepositoryRoot string                            `yaml:"repositoryRoot"`
+	Metadata       []ownershipMetadataSourceDocument `yaml:"metadata"`
+	Codeowners     *codeownersDocument               `yaml:"codeowners"`
+	DashboardTags  *bool                             `yaml:"dashboardTags"`
+}
+
+type codeownersDocument struct {
+	Enabled *bool  `yaml:"enabled"`
+	Path    string `yaml:"path"`
+}
+
+type ownershipMetadataSourceDocument struct {
+	Path string
+}
+
+func (source *ownershipMetadataSourceDocument) UnmarshalYAML(node *yaml.Node) error {
+	if node.Kind == yaml.ScalarNode {
+		source.Path = node.Value
+		return nil
+	}
+	if node.Kind != yaml.MappingNode {
+		return fmt.Errorf("ownership metadata source must be a path string or mapping")
+	}
+	for index := 0; index < len(node.Content); index += 2 {
+		key := node.Content[index].Value
+		value := node.Content[index+1]
+		switch key {
+		case "path":
+			if err := value.Decode(&source.Path); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("unknown ownership metadata source field %q", key)
+		}
+	}
+	return nil
 }
 
 type sourcesDocument struct {
@@ -238,6 +304,22 @@ func ValidateConfig(config Config) error {
 			issues.add(path+".bearerTokenEnv", "must be a valid environment variable name")
 		}
 	}
+	if config.Ownership.Enabled {
+		if isBlank(config.Ownership.RepositoryRoot) {
+			issues.add("ownership.repositoryRoot", "is required when ownership discovery is enabled")
+		}
+		for index, source := range config.Ownership.Metadata {
+			path := fmt.Sprintf("ownership.metadata[%d].path", index)
+			if isBlank(source.Pattern) {
+				issues.add(path, "is required")
+			} else if !isRepositoryRelativePath(source.Pattern) {
+				issues.add(path, "must be relative to ownership.repositoryRoot and must not escape it")
+			}
+		}
+		if configuredPath := config.Ownership.Codeowners.Path; configuredPath != "" && !isRepositoryRelativePath(configuredPath) {
+			issues.add("ownership.codeowners.path", "must be relative to ownership.repositoryRoot and must not escape it")
+		}
+	}
 	if totalSources == 0 {
 		issues.add("sources", "must configure at least one consumer source")
 	}
@@ -299,6 +381,7 @@ func normalizeConfig(document configDocument) Config {
 			Pyrra:           normalizePatterns(document.Sources.Pyrra),
 			PersesUsage:     normalizePersesUsageSources(document.Sources.PersesUsage),
 		},
+		Ownership: normalizeOwnership(document.Ownership),
 		Analysis: AnalysisConfig{
 			IncludeTransitiveDependencies: transitive,
 			UnresolvedReferencePolicy:     unresolvedPolicy,
@@ -310,6 +393,54 @@ func normalizeConfig(document configDocument) Config {
 		},
 		Output: OutputConfig{Formats: formats},
 	}
+}
+
+func normalizeOwnership(document *ownershipDocument) OwnershipConfig {
+	if document == nil {
+		return OwnershipConfig{}
+	}
+	codeownersEnabled := true
+	codeownersPath := ""
+	if document.Codeowners != nil {
+		if document.Codeowners.Enabled != nil {
+			codeownersEnabled = *document.Codeowners.Enabled
+		}
+		codeownersPath = filepath.ToSlash(strings.TrimSpace(document.Codeowners.Path))
+	}
+	dashboardTags := true
+	if document.DashboardTags != nil {
+		dashboardTags = *document.DashboardTags
+	}
+	repositoryRoot := strings.TrimSpace(document.RepositoryRoot)
+	if repositoryRoot == "" {
+		repositoryRoot = "."
+	}
+	return OwnershipConfig{
+		Enabled:        true,
+		RepositoryRoot: repositoryRoot,
+		Metadata:       normalizeOwnershipMetadataSources(document.Metadata),
+		Codeowners: CodeownersConfig{
+			Enabled: codeownersEnabled,
+			Path:    codeownersPath,
+		},
+		DashboardTags: dashboardTags,
+	}
+}
+
+func normalizeOwnershipMetadataSources(documents []ownershipMetadataSourceDocument) []OwnershipMetadataSource {
+	sources := make([]OwnershipMetadataSource, 0, len(documents))
+	for _, document := range documents {
+		sources = append(sources, OwnershipMetadataSource{Pattern: strings.TrimSpace(document.Path)})
+	}
+	return sources
+}
+
+func isRepositoryRelativePath(value string) bool {
+	value = filepath.Clean(strings.TrimSpace(value))
+	if value == "." || filepath.IsAbs(value) {
+		return false
+	}
+	return value != ".." && !strings.HasPrefix(value, ".."+string(filepath.Separator))
 }
 
 var environmentNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)

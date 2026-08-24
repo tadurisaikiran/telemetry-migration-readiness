@@ -50,6 +50,8 @@ It contains:
 - aggregate classification counts;
 - only `LEGACY_ONLY` and `UNCERTAIN` findings, ranked deterministically by
   criticality, classification, change, and consumer ID;
+- advisory owner, provenance, confidence, and ambiguity when deterministic
+  ownership discovery found them;
 - relevant reference evidence and readable dependency paths; and
 - adapter diagnostics.
 
@@ -58,9 +60,9 @@ does not serialize configuration, process environment, credential files, or
 the repository as a whole. Secret-like strings in included fields are redacted
 before encoding. Requests are limited to 8 MiB.
 
-Every request states that migration, source, expression, diagnostic, dashboard,
-and repository text is untrusted data and must never be interpreted as model
-instructions.
+Every request states that migration, ownership, source, expression, diagnostic,
+dashboard, and repository text is untrusted data and must never be interpreted
+as model instructions.
 
 ## Response schema
 

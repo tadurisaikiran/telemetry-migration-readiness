@@ -15,6 +15,11 @@ missing destinations, secret-like provider text, duplicate or unknown targets,
 ambiguous artifact scalars, response status/patch claims, timeouts, oversized
 process output, and proof that source files remain byte-for-byte unchanged.
 
+Ownership discovery has parser, wildcard, source-order, last-match, precedence,
+joint-owner, ambiguity, determinism, and fuzz coverage. An integration invariant
+compares ownership-disabled, valid, and malformed runs and requires identical
+readiness summaries; malformed ownership diagnostics must remain advisory.
+
 ## Implemented test layers
 
 The current deterministic engine has:
@@ -23,6 +28,7 @@ The current deterministic engine has:
 - valid YAML fixtures covering all four implemented change kinds;
 - invalid YAML fixtures with exact golden diagnostics;
 - PromQL AST unit and fuzz tests;
+- CODEOWNERS and strict ownership-metadata unit and fuzz tests;
 - component fixtures for Prometheus rules, PrometheusRule CRDs, Grafana, Sloth,
   and Pyrra;
 - cycle and transitive-chain graph tests;

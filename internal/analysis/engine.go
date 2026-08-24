@@ -17,6 +17,7 @@ import (
 	"github.com/tadurisaikiran/telemetry-migration-readiness/internal/domain"
 	"github.com/tadurisaikiran/telemetry-migration-readiness/internal/graph"
 	"github.com/tadurisaikiran/telemetry-migration-readiness/internal/impact"
+	"github.com/tadurisaikiran/telemetry-migration-readiness/internal/ownership"
 	"github.com/tadurisaikiran/telemetry-migration-readiness/internal/readiness"
 	filesource "github.com/tadurisaikiran/telemetry-migration-readiness/internal/source"
 )
@@ -69,6 +70,9 @@ func Discover(ctx context.Context, configuration config.Config) (domain.Discover
 			return (pyrra.Loader{Required: required}).LoadFile(ctx, path)
 		})
 	loadPersesUsage(ctx, configuration.Sources.PersesUsage, &discovery)
+	if err := ownership.Enrich(ctx, configuration.Ownership, &discovery); err != nil {
+		return domain.Discovery{}, nil, fmt.Errorf("enrich consumer ownership: %w", err)
+	}
 
 	if err := ctx.Err(); err != nil {
 		return domain.Discovery{}, nil, err

@@ -20,8 +20,9 @@ Assets requiring protection include:
 ## Trust boundaries
 
 Local migration/configuration files, dashboards, comments, descriptions,
-expressions, API responses, and model output are untrusted data. They never
-become instructions to TMR.
+expressions, CODEOWNERS entries, ownership metadata, dashboard tags, API
+responses, and model output are untrusted data. They never become instructions
+to TMR.
 
 The deterministic parsers, graph, and readiness evaluator form the safety
 boundary. Optional adapters may add evidence or diagnostics but cannot mark a
@@ -67,6 +68,12 @@ provider succeeds.
 
 AI-inferred absence never removes a reference, resolves uncertainty, or proves
 safety. Read-only explanation has no reanalysis input.
+
+Ownership is routing context, not safety evidence or authorization. Invalid,
+missing, or ambiguous ownership stays visible but cannot alter readiness.
+Repository paths configured for ownership metadata and CODEOWNERS are scoped to
+an explicit repository root. TMR never asks an AI provider to select an owner,
+verify GitHub permissions, or authorize a candidate patch.
 
 ## Availability and resource limits
 

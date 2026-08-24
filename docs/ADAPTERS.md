@@ -36,6 +36,15 @@ visible diagnostics. See [the Perses integration guide](PERSES.md).
 Remote and ecosystem integrations add evidence without becoming prerequisites
 for the local deterministic core.
 
+## Advisory enrichment
+
+`internal/ownership` enriches adapter output from explicit repository metadata,
+GitHub CODEOWNERS, and Grafana dashboard tags. It runs after all local and
+remote consumer adapters, so the same precedence is applied to every consumer.
+Invalid ownership evidence produces visible non-blocking diagnostics and never
+changes dependency completeness or readiness. See [consumer ownership
+discovery](OWNERSHIP.md).
+
 ## Change adapters
 
 - `weaver` reads current V1 and V2 `weaver registry diff` JSON. Every

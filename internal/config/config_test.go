@@ -92,3 +92,83 @@ sources:
 		}
 	}
 }
+
+func TestParseConfigSupportsOwnershipDiscovery(t *testing.T) {
+	t.Parallel()
+
+	configuration, err := ParseConfig(strings.NewReader(`apiVersion: tmr/v1alpha1
+sources:
+  grafana: [./grafana/*.json]
+ownership:
+  repositoryRoot: ./repository
+  metadata:
+    - path: .tmr/ownership.yaml
+  codeowners:
+    path: .github/CODEOWNERS
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ownership := configuration.Ownership
+	if !ownership.Enabled || ownership.RepositoryRoot != "./repository" || !ownership.DashboardTags {
+		t.Fatalf("ownership = %#v", ownership)
+	}
+	if !ownership.Codeowners.Enabled || ownership.Codeowners.Path != ".github/CODEOWNERS" {
+		t.Fatalf("codeowners = %#v", ownership.Codeowners)
+	}
+	if len(ownership.Metadata) != 1 || ownership.Metadata[0].Pattern != ".tmr/ownership.yaml" {
+		t.Fatalf("metadata = %#v", ownership.Metadata)
+	}
+}
+
+func TestParseConfigOwnershipIsOptIn(t *testing.T) {
+	t.Parallel()
+
+	configuration, err := ParseConfig(strings.NewReader(`apiVersion: tmr/v1alpha1
+sources:
+  grafana: [./grafana/*.json]
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if configuration.Ownership.Enabled {
+		t.Fatalf("ownership = %#v, want disabled", configuration.Ownership)
+	}
+}
+
+func TestParseConfigRejectsOwnershipPathsOutsideRepository(t *testing.T) {
+	t.Parallel()
+
+	_, err := ParseConfig(strings.NewReader(`apiVersion: tmr/v1alpha1
+sources:
+  grafana: [./grafana/*.json]
+ownership:
+  metadata:
+    - ../outside.yaml
+  codeowners:
+    path: /tmp/CODEOWNERS
+`))
+	if err == nil {
+		t.Fatal("ParseConfig() error = nil")
+	}
+	for _, expected := range []string{"ownership.metadata[0].path", "ownership.codeowners.path"} {
+		if !strings.Contains(err.Error(), expected) {
+			t.Errorf("error = %q, want %q", err, expected)
+		}
+	}
+}
+
+func TestParseConfigRejectsUnknownOwnershipField(t *testing.T) {
+	t.Parallel()
+
+	_, err := ParseConfig(strings.NewReader(`apiVersion: tmr/v1alpha1
+sources:
+  grafana: [./grafana/*.json]
+ownership:
+  repositoryRoot: .
+  inferAnything: true
+`))
+	if err == nil || !strings.Contains(err.Error(), "inferAnything") {
+		t.Fatalf("error = %v", err)
+	}
+}

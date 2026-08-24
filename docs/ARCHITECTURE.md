@@ -34,6 +34,9 @@ strict validation and local/remote evidence adapters
 official PromQL AST reference extraction
              |
              v
+advisory ownership enrichment
+             |
+             v
 in-memory dependency graph
              |
              v
@@ -87,6 +90,12 @@ unresolved evidence.
 
 `pkg/promql` uses Prometheus's official parser and walks the typed AST. It does
 not use substring matching to establish metric or label dependencies.
+
+`internal/ownership` runs after consumer discovery and before graph
+construction. It applies strict TMR ownership metadata, GitHub CODEOWNERS, and
+Grafana tag evidence with fixed precedence. It enriches `domain.Consumer` only;
+its diagnostics are advisory and it has no dependency on `internal/readiness`.
+See [the ownership discovery guide](OWNERSHIP.md).
 
 `internal/graph`, `internal/impact`, and `internal/readiness` form the safety
 core. The graph is rebuilt in memory for every run, traversal is cycle-safe,

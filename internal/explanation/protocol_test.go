@@ -57,6 +57,13 @@ func TestBuildRequestIsMinimalRedactedAndDeterministic(t *testing.T) {
 	if first.Findings[2].Consumer.Name != "checkout:rate1m" {
 		t.Fatalf("last finding = %#v", first.Findings[2])
 	}
+	ambiguous := first.Findings[1].Consumer
+	if !ambiguous.OwnershipAmbiguous || ambiguous.OwnershipSource != "grafana_tags" || ambiguous.OwnershipConfidence != domain.ConfidenceMedium {
+		t.Fatalf("ownership context = %#v", ambiguous)
+	}
+	if got := strings.Join(ambiguous.OwnershipCandidates, ","); got != "Checkout,Payments" {
+		t.Fatalf("ownership candidates = %q", got)
+	}
 	for _, finding := range first.Findings {
 		if finding.Consumer.Name == "Migrated dashboard" {
 			t.Fatal("already-migrated repository content was transmitted")
@@ -88,7 +95,16 @@ func explanationFixture(t *testing.T) (readiness.Result, *graph.Graph) {
 		Consumers: []domain.Consumer{
 			{ID: "recording", Kind: domain.ConsumerKindRecordingRule, Name: "checkout:rate1m", Criticality: domain.CriticalityHigh, Expression: `rate(old_metric{token="expression-secret"}[1m])`},
 			{ID: "alert", Kind: domain.ConsumerKindAlertRule, Name: "TrafficStopped", Criticality: domain.CriticalityCritical, Expression: "checkout:rate1m == 0"},
-			{ID: "uncertain", Kind: domain.ConsumerKindDashboard, Name: "Templated dashboard", Criticality: domain.CriticalityCritical, Unresolved: true},
+			{
+				ID: "uncertain", Kind: domain.ConsumerKindDashboard, Name: "Templated dashboard", Criticality: domain.CriticalityCritical, Unresolved: true,
+				Metadata: map[string]string{
+					"ownership.source":     "grafana_tags",
+					"ownership.confidence": "medium",
+					"ownership.rule":       "Checkout, Payments",
+					"ownership.candidates": `["Payments","Checkout"]`,
+					"ownership.ambiguous":  "true",
+				},
+			},
 			{ID: "migrated", Kind: domain.ConsumerKindDashboard, Name: "Migrated dashboard", Criticality: domain.CriticalityLow, Expression: "new_metric"},
 		},
 		References: []domain.Reference{
