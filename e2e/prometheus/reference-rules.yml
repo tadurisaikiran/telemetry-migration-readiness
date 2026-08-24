@@ -1,0 +1,11 @@
+groups:
+  - name: tmr-reference
+    interval: 1m
+    rules:
+      - record: checkout:legacy_count
+        expr: checkout_request_duration_seconds_count
+      - alert: CheckoutLegacyMetricMissing
+        expr: absent(checkout_request_duration_seconds_count) == 1
+        for: 1m
+        labels:
+          severity: page

@@ -27,6 +27,8 @@ Implemented:
 - Fail-closed `READY`, `BLOCKED`, and `INCOMPLETE` decisions.
 - Console, versioned JSON, Markdown, and graph JSON output.
 - `analyze`, `validate`, `explain`, and `graph` CLI commands.
+- A pinned live Prometheus/Grafana/Sloth migration lifecycle that verifies
+  predictions against runtime behavior.
 
 ## Requirements
 

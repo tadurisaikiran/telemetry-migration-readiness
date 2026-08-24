@@ -87,7 +87,7 @@ func (loader Loader) Parse(source string, reader io.Reader) (domain.Discovery, e
 			})
 		}
 		for _, query := range queries {
-			analysis, analysisErr := tmrpromql.Analyze(query)
+			analysis, analysisErr := tmrpromql.Analyze(expandKnownTemplates(query))
 			if analysisErr != nil || len(analysis.Unresolved) != 0 {
 				consumer.Unresolved = true
 				message := "PromQL expression is unresolved"
@@ -113,6 +113,12 @@ func (loader Loader) Parse(source string, reader io.Reader) (domain.Discovery, e
 		discovery.Consumers = append(discovery.Consumers, consumer)
 	}
 	return discovery, nil
+}
+
+func expandKnownTemplates(query string) string {
+	result := strings.ReplaceAll(query, "{{.window}}", "5m")
+	result = strings.ReplaceAll(result, "{{ .window }}", "5m")
+	return result
 }
 
 type slothDocument struct {

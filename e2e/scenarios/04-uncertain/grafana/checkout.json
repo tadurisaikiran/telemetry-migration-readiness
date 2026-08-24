@@ -1,0 +1,30 @@
+{
+  "uid": "checkout-live",
+  "title": "Checkout Live Migration",
+  "tags": ["critical"],
+  "schemaVersion": 41,
+  "datasource": {"type": "prometheus", "uid": "prometheus"},
+  "templating": {
+    "list": [
+      {"name": "service", "type": "custom", "query": "checkout"}
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Known migrated rate",
+      "type": "timeseries",
+      "targets": [
+        {"refId": "A", "expr": "sum(rate(checkout_server_request_duration_seconds_count{http_request_method=\"GET\"}[1m]))"}
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Dynamic critical rate",
+      "type": "timeseries",
+      "targets": [
+        {"refId": "A", "expr": "sum(rate(${service}_request_duration_seconds_count[1m]))"}
+      ]
+    }
+  ]
+}

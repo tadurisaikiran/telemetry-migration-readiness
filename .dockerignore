@@ -1,0 +1,5 @@
+*
+!go.mod
+!e2e/
+!e2e/exporter/
+!e2e/exporter/main.go

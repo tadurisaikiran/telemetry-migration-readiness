@@ -1,0 +1,48 @@
+name: Upstream Compatibility
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-lifecycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: pinned
+            prometheus: prom/prometheus:v3.13.2
+            grafana: grafana/grafana:13.1.3
+            sloth: ghcr.io/slok/sloth:v0.16.0
+          - name: previous-supported
+            prometheus: prom/prometheus:v3.5.5
+            grafana: grafana/grafana:13.0.6
+            sloth: ghcr.io/slok/sloth:v0.15.0
+          - name: upstream-latest
+            prometheus: prom/prometheus:latest
+            grafana: grafana/grafana:latest
+            sloth: ghcr.io/slok/sloth:latest
+
+    name: ${{ matrix.name }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run compatibility lifecycle
+        env:
+          TMR_PROMETHEUS_IMAGE: ${{ matrix.prometheus }}
+          TMR_GRAFANA_IMAGE: ${{ matrix.grafana }}
+          TMR_SLOTH_IMAGE: ${{ matrix.sloth }}
+        run: ./e2e/scripts/run-e2e.sh

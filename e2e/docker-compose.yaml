@@ -1,0 +1,53 @@
+name: tmr-e2e
+
+services:
+  exporter:
+    build:
+      context: ..
+      dockerfile: e2e/exporter/Dockerfile
+    environment:
+      TMR_EXPORT_MODE: ${TMR_EXPORT_MODE:?TMR_EXPORT_MODE is required}
+
+  prometheus:
+    image: ${TMR_PROMETHEUS_IMAGE:-prom/prometheus:v3.13.2}
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    ports:
+      - "127.0.0.1:19090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ${TMR_SCENARIO_DIR:?TMR_SCENARIO_DIR is required}/prometheus:/etc/prometheus/rules:ro
+    depends_on:
+      - exporter
+
+  grafana:
+    image: ${TMR_GRAFANA_IMAGE:-grafana/grafana:13.1.3}
+    ports:
+      - "127.0.0.1:13000:3000"
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ${TMR_SCENARIO_DIR:?TMR_SCENARIO_DIR is required}/grafana:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+
+  promtool:
+    image: ${TMR_PROMETHEUS_IMAGE:-prom/prometheus:v3.13.2}
+    profiles: ["tools"]
+    entrypoint: ["/bin/promtool"]
+    volumes:
+      - ./prometheus:/common:ro
+      - ${TMR_SCENARIO_DIR:?TMR_SCENARIO_DIR is required}:/scenario:ro
+
+  sloth:
+    image: ${TMR_SLOTH_IMAGE:-ghcr.io/slok/sloth:v0.16.0}
+    profiles: ["tools"]
+    volumes:
+      - ./sloth:/slo:ro

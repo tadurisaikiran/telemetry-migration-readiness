@@ -1,0 +1,20 @@
+apiVersion: tmr/v1alpha1
+sources:
+  prometheusRules:
+    - path: e2e/scenarios/04-uncertain/prometheus/*.yml
+      required: true
+  grafana:
+    - path: e2e/scenarios/04-uncertain/grafana/*.json
+      required: true
+  sloth:
+    - path: e2e/sloth/*.yml
+      required: true
+analysis:
+  includeTransitiveDependencies: true
+  unresolvedReferencePolicy: error
+policy:
+  failOnCriticalLegacyConsumer: true
+  failOnCriticalUnknown: true
+  minimumBlockingCriticality: high
+output:
+  formats: [json]

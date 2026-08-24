@@ -18,6 +18,7 @@ The current deterministic engine has:
 - an exact JSON golden report for the checkout migration;
 - CLI integration tests for output and the permanent `0/1/2/3` exit contract;
 - CI checks for formatting, vetting, and race-enabled tests.
+- a pinned live Docker lifecycle against Prometheus, Grafana, and Sloth.
 
 Run the local checks with:
 
@@ -29,10 +30,11 @@ go test -race ./...
 
 ## Mandatory live E2E release gate
 
-The live harness is the next release gate. TMR must not be described as stable
-until it passes.
+The live harness is implemented under `e2e/` and is a pull-request release
+gate. It runs pinned versions for reproducibility; a weekly workflow exercises
+previous-supported and upstream-latest combinations.
 
-The harness will run a pinned Docker Compose stack containing a controlled
+The harness runs a pinned Docker Compose stack containing a controlled
 exporter, Prometheus, Grafana, and Sloth, with Pyrra added as a second tier. It
 will exercise this telemetry lifecycle:
 
@@ -49,7 +51,7 @@ It must prove both prediction directions:
    same critical queries, rules, dashboards, and SLOs continue working after
    legacy telemetry is removed.
 
-The stable release gate will also require:
+The release gate proves:
 
 - direct metric and label dependency detection;
 - Grafana, alert, recording-rule, and SLO consumer discovery;
@@ -59,7 +61,18 @@ The stable release gate will also require:
 - no panic or false safety result for malformed PromQL or graph cycles;
 - independent `promtool` checks and rule tests;
 - Sloth validation and generated-rule cross-checks;
-- proof that optional AI output cannot override deterministic readiness.
+- proof that the deterministic result retains authority (the adversarial AI
+  test is added with the optional AI milestone).
+
+Run the core and live layers with:
+
+```bash
+go test -race ./...
+./e2e/scripts/run-e2e.sh
+```
+
+See [the E2E harness guide](../e2e/README.md) for pinned versions, scenario
+expectations, and runtime assertions.
 
 Pinned E2E tests will run on pull requests. Compatibility matrices and latest
 upstream versions will run on scheduled workflows after the harness exists.

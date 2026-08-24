@@ -65,6 +65,14 @@ func TestParseSkipsKnownNonPrometheusDatasource(t *testing.T) {
 	}
 }
 
+func TestParseRejectsCorruptJSON(t *testing.T) {
+	t.Parallel()
+
+	if _, err := (Loader{Required: true}).Parse("corrupt.json", strings.NewReader(`{"panels": [`)); err == nil {
+		t.Fatal("Parse() accepted corrupt Grafana JSON")
+	}
+}
+
 func hasGrafanaReference(references []domain.Reference, kind domain.SymbolKind, name string) bool {
 	for _, reference := range references {
 		if reference.Symbol.Kind == kind && reference.Symbol.Name == name {

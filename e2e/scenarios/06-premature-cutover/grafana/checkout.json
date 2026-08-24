@@ -1,0 +1,17 @@
+{
+  "uid": "checkout-live",
+  "title": "Checkout Live Migration",
+  "tags": ["production"],
+  "schemaVersion": 41,
+  "datasource": {"type": "prometheus", "uid": "prometheus"},
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request rate",
+      "type": "timeseries",
+      "targets": [
+        {"refId": "A", "expr": "sum(rate(checkout_request_duration_seconds_count{http_method=\"GET\"}[1m]))"}
+      ]
+    }
+  ]
+}

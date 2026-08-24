@@ -1,0 +1,19 @@
+version: prometheus/v1
+service: checkout
+labels:
+  owner: platform
+  tier: "1"
+slos:
+  - name: availability
+    objective: 99.0
+    description: Successful checkout requests derived from the migration recording rule.
+    sli:
+      events:
+        error_query: sum(avg_over_time(checkout:requests:rate1m{status=~"5.."}[{{ .window }}:]))
+        total_query: sum(avg_over_time(checkout:requests:rate1m[{{ .window }}:]))
+    alerting:
+      name: CheckoutAvailabilityBurn
+      labels:
+        severity: page
+      annotations:
+        summary: Checkout availability is consuming error budget.

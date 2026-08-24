@@ -1,0 +1,20 @@
+rule_files:
+  - reference-rules.yml
+
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      - series: checkout_request_duration_seconds_count{http_method="GET",status="200"}
+        values: 100 200 300
+    promql_expr_test:
+      - expr: checkout:legacy_count
+        eval_time: 2m
+        exp_samples:
+          - labels: checkout:legacy_count{http_method="GET",status="200"}
+            value: 300
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: CheckoutLegacyMetricMissing
+        exp_alerts: []

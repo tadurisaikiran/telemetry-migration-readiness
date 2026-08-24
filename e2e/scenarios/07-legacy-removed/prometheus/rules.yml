@@ -1,0 +1,13 @@
+groups:
+  - name: checkout
+    interval: 1s
+    rules:
+      - record: checkout:p95_latency
+        expr: histogram_quantile(0.95, sum by (le) (rate(checkout_server_request_duration_seconds_bucket[10s])))
+      - record: checkout:requests:rate1m
+        expr: sum by (status) (rate(checkout_server_request_duration_seconds_count[10s]))
+      - alert: CheckoutLatencyHigh
+        expr: checkout:p95_latency > 1
+        for: 5s
+        labels:
+          severity: page
