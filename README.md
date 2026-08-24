@@ -121,6 +121,9 @@ The architecture and milestone boundaries are documented in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The mandatory verification plan is
 documented in [docs/TESTING.md](docs/TESTING.md).
 
+For a problem-first explanation of the migration lifecycle, read
+[When Telemetry Migrations Fail Silently](docs/articles/when-telemetry-migrations-fail-silently.md).
+
 See [the roadmap](docs/ROADMAP.md), [contribution guide](CONTRIBUTING.md), and
 [security policy](SECURITY.md) before proposing or reporting work.
 
