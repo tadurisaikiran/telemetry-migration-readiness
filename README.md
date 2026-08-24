@@ -27,11 +27,13 @@ Implemented:
 - Cycle-safe transitive dependency graphs through recording rules.
 - Fail-closed `READY`, `BLOCKED`, and `INCOMPLETE` decisions.
 - Console, versioned JSON, Markdown, and graph JSON output.
-- `analyze`, `validate`, `explain`, and `graph` CLI commands.
+- `analyze`, `advise`, `validate`, `explain`, and `graph` CLI commands.
 - Optional OpenTelemetry Weaver V1/V2 registry-diff import with mandatory,
   explicit Prometheus backend mappings.
 - Optional Perses metrics-usage HTTP evidence for dashboards, recording rules,
   alert rules, partial metrics, and pending usage.
+- Optional read-only AI explanations through a provider-neutral local process;
+  deterministic readiness remains authoritative.
 - A pinned live Prometheus/Grafana/Sloth migration lifecycle that verifies
   predictions against runtime behavior.
 
@@ -145,12 +147,33 @@ sources:
 The adapter consumes the documented API only; Perses is not a TMR dependency.
 See [the Perses metrics-usage integration guide](docs/PERSES.md).
 
+## Optional AI explanations
+
+AI is disabled unless `tmr advise` is given an explicit local provider
+executable:
+
+```bash
+tmr advise \
+  --config ./tmr.yaml \
+  --migration ./migration.yaml \
+  --question "Why is this blocked, and what should migrate first?" \
+  --ai-command ./my-tmr-ai-provider
+```
+
+TMR sends a bounded, redacted JSON evidence packet over standard input and
+accepts one strict JSON explanation on standard output. The provider cannot
+return a readiness status or a patch. `advise` preserves the deterministic
+exit code, so a useful explanation of a blocked migration still exits `2`.
+See [the AI explanation protocol](docs/AI_AGENT.md) and
+[threat model](docs/THREAT_MODEL.md).
+
 ## Design principles
 
 - Deterministic analysis owns facts and safety decisions.
 - Parsing or adapter failures must never be interpreted as absence of risk.
 - TMR remains useful without an LLM, network connection, database, or hosted
   service.
+- AI output is explanatory and can neither weaken evidence nor change status.
 - Telemetry domains remain separate unless an explicit mapping connects them.
 - Every dependency finding retains evidence and provenance.
 

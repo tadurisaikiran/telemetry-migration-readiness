@@ -51,6 +51,7 @@ jobs:
           go test ./adapters/weaver -run=^$ -fuzz=FuzzParseDiffDoesNotPanic -fuzztime=3s
           go test ./adapters/weaver -run=^$ -fuzz=FuzzParseMappingDoesNotPanic -fuzztime=3s
           go test ./adapters/persesusage -run=^$ -fuzz=FuzzDecodeMetricsDoesNotPanic -fuzztime=3s
+          go test ./internal/explanation -run=^$ -fuzz=FuzzDecodeResponseDoesNotPanic -fuzztime=3s
 
       - name: Check reachable Go vulnerabilities
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...

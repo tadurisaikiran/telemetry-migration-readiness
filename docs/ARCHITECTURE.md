@@ -43,6 +43,22 @@ deterministic impact + readiness policy
 console / JSON / Markdown reports
 ```
 
+An explicitly enabled explanation path begins only after that pipeline has
+finished:
+
+```text
+authoritative readiness result
+             |
+             v
+minimal redacted evidence packet
+             |
+             v
+optional local AI provider process
+             |
+             v
+non-authoritative explanation + unchanged status
+```
+
 `internal/config` owns YAML-specific migration and configuration document
 structs. It rejects unknown
 fields, multiple YAML documents, oversized input, and invalid change shapes.
@@ -82,10 +98,18 @@ machine API for Actions and future optional integrations. Exit codes are part
 of the public contract. Progress percentages remain informational and never
 establish safety.
 
+`internal/explanation` builds a minimal packet containing only blockers,
+uncertainties, diagnostics, migration changes, and aggregate counts. It invokes
+a user-selected executable directly through a strict JSON protocol, with no
+shell and no provider SDK. The response schema has no status or patch field,
+unknown fields are rejected, and rendering repeats the deterministic status on
+both sides of provider-authored prose. This package cannot call the readiness
+evaluator with modified evidence.
+
 ## Next architectural layers
 
 - OpenTelemetry, trace, and log analysis.
-- AI explanation or remediation.
+- Deterministically validated AI remediation.
 - Additional runtime query evidence, APIs, MCP, and server/UI modes.
 - Additional live end-to-end tiers described in `TESTING.md`.
 

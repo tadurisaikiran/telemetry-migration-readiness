@@ -3,6 +3,12 @@
 Testing is part of the safety contract. A parser or adapter error must never be
 mistaken for evidence that a dependency does not exist.
 
+The optional AI explanation boundary is tested as an adversarial protocol:
+status fields and unknown consumer IDs are rejected, provider timeouts and
+oversized output are bounded, secrets are redacted, terminal controls are
+removed, stable risk ordering is asserted, and CLI tests prove that model prose
+cannot change readiness exit codes.
+
 ## Implemented test layers
 
 The current deterministic engine has:

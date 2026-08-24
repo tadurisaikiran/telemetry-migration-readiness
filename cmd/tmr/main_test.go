@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -205,6 +207,89 @@ func TestAnalyzeWeaverCLIContract(t *testing.T) {
 	if got := result.Migration.Changes[0].Metadata["source.adapter"]; got != "weaver" {
 		t.Fatalf("source adapter metadata = %q, want weaver", got)
 	}
+}
+
+func TestAdviseCLIIsReadOnlyAndPreservesBlockedExit(t *testing.T) {
+	t.Parallel()
+
+	root := filepath.Clean(filepath.Join("..", ".."))
+	command := exec.Command(os.Args[0], "-test.run=TestCLIHelperProcess", "--",
+		"advise",
+		"--config", "examples/checkout-migration/tmr.yaml",
+		"--migration", "examples/checkout-migration/migration.yaml",
+		"--question", "Why is this migration blocked?",
+		"--ai-command", os.Args[0],
+		"--ai-arg=-test.run=TestCLIAIProviderHelper",
+	)
+	command.Dir = root
+	command.Env = append(os.Environ(), "TMR_CLI_HELPER=1", "TMR_CLI_AI_HELPER=1")
+	output, err := command.Output()
+	exitError, ok := err.(*exec.ExitError)
+	if !ok {
+		t.Fatalf("error = %v, want exit code 2", err)
+	}
+	if exitError.ExitCode() != 2 {
+		t.Fatalf("exit code = %d, want 2; stderr = %q", exitError.ExitCode(), exitError.Stderr)
+	}
+	if got := strings.Count(string(output), "BLOCKED"); got != 2 {
+		t.Fatalf("BLOCKED count = %d, want 2; output = %q", got, output)
+	}
+	if !strings.Contains(string(output), "non-authoritative") || !strings.Contains(string(output), "Suggested migration order") {
+		t.Fatalf("output = %q", output)
+	}
+}
+
+func TestAdviseRequiresExplicitProvider(t *testing.T) {
+	t.Parallel()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	exitCode := run(context.Background(), []string{
+		"advise", "--config", "tmr.yaml", "--migration", "migration.yaml", "--question", "why",
+	}, &stdout, &stderr)
+	if exitCode != 1 || !strings.Contains(stderr.String(), "--ai-command") {
+		t.Fatalf("exit = %d, stderr = %q", exitCode, stderr.String())
+	}
+}
+
+func TestCLIAIProviderHelper(t *testing.T) {
+	if os.Getenv("TMR_CLI_AI_HELPER") != "1" {
+		return
+	}
+	contents, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
+	var request struct {
+		Authoritative struct {
+			Status readiness.Status `json:"status"`
+		} `json:"authoritative"`
+		Findings []struct {
+			Consumer struct {
+				ID string `json:"id"`
+			} `json:"consumer"`
+		} `json:"findings"`
+	}
+	if err := json.Unmarshal(contents, &request); err != nil || request.Authoritative.Status != readiness.StatusBlocked || len(request.Findings) == 0 {
+		fmt.Fprintf(os.Stderr, "invalid deterministic evidence request: decode=%v status=%q findings=%d\n", err, request.Authoritative.Status, len(request.Findings))
+		os.Exit(2)
+	}
+	response := map[string]any{
+		"schemaVersion": "tmr-ai-explanation-response/v1alpha1",
+		"answer":        "A confirmed legacy consumer still blocks removal.",
+		"priorities": []map[string]any{{
+			"order":      1,
+			"consumerId": request.Findings[0].Consumer.ID,
+			"action":     "Migrate this confirmed legacy consumer.",
+			"rationale":  "TMR ranked it first from deterministic criticality and dependency evidence.",
+		}},
+	}
+	if err := json.NewEncoder(os.Stdout).Encode(response); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
+	os.Exit(0)
 }
 
 func TestCheckoutReportGolden(t *testing.T) {
