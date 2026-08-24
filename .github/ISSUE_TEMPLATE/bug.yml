@@ -1,0 +1,57 @@
+name: Bug report
+description: Report reproducible incorrect or unsafe behavior
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Never include credentials or sensitive telemetry. Report vulnerabilities
+        through GitHub private vulnerability reporting instead.
+  - type: input
+    id: version
+    attributes:
+      label: TMR version or commit
+      placeholder: v0.1.0 or commit SHA
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Include the actual and expected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal reproduction
+      description: Include a sanitized migration, configuration, and consumer fixture.
+    validations:
+      required: true
+  - type: dropdown
+    id: safety
+    attributes:
+      label: Safety impact
+      options:
+        - TMR may incorrectly report READY
+        - TMR may miss or misclassify a dependency
+        - TMR fails closed or cannot complete
+        - Reporting or usability only
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, architecture, Go/Docker versions, and relevant upstream versions.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues.
+          required: true
+        - label: This report contains no credentials or sensitive telemetry.
+          required: true

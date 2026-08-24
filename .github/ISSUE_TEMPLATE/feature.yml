@@ -1,0 +1,42 @@
+name: Feature request
+description: Propose a scoped capability or adapter improvement
+title: "feat: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What migration workflow or safety gap needs to be addressed?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed contract
+      description: Describe inputs, outputs, evidence, uncertainty, and failure behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: textarea
+    id: tests
+    attributes:
+      label: Verification plan
+      description: Which unit, component, golden, integration, or E2E test proves it?
+    validations:
+      required: true
+  - type: checkboxes
+    id: boundaries
+    attributes:
+      label: Architecture boundaries
+      options:
+        - label: The deterministic evaluator remains authoritative.
+          required: true
+        - label: Missing or ambiguous evidence cannot prove safety.
+          required: true
+        - label: I searched existing issues and roadmap items.
+          required: true
