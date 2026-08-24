@@ -34,7 +34,7 @@ runs:
   using: composite
   steps:
     - name: Set up official Go
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@v7
       with:
         go-version-file: ${{ github.action_path }}/go.mod
         cache-dependency-path: ${{ github.action_path }}/go.sum
