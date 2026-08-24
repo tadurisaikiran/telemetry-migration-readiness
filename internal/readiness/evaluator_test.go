@@ -73,6 +73,72 @@ func TestEvaluateRequiredDiagnosticIsIncomplete(t *testing.T) {
 	}
 }
 
+func TestEvaluateScopesMissingLabelEvidenceToLabelChanges(t *testing.T) {
+	t.Parallel()
+
+	metric := domain.Symbol{
+		Domain: domain.DomainPrometheus,
+		Kind:   domain.SymbolKindMetric,
+		Name:   "checkout_server_request_duration_seconds_count",
+	}
+	discovery := domain.Discovery{
+		Consumers: []domain.Consumer{{
+			ID:          "remote-dashboard",
+			Kind:        domain.ConsumerKindDashboard,
+			Name:        "Remote dashboard",
+			Criticality: domain.CriticalityCritical,
+		}},
+		References: []domain.Reference{
+			{ConsumerID: "remote-dashboard", Symbol: metric},
+			{
+				ConsumerID:         "remote-dashboard",
+				Symbol:             metric,
+				RequiresResolution: true,
+				ResolutionScope:    domain.ResolutionScopeLabels,
+			},
+		},
+	}
+
+	metricResult := evaluateForTest(t, metricRenameMigration(), discovery)
+	if got, want := metricResult.Summary.Status, StatusReady; got != want {
+		t.Fatalf("metric status = %q, want %q", got, want)
+	}
+	if got := findConsumerResult(t, metricResult, "remote-dashboard").Classification; got != ClassificationMigrated {
+		t.Fatalf("metric classification = %q, want MIGRATED", got)
+	}
+
+	labelDestination := domain.Symbol{
+		Domain: domain.DomainPrometheus,
+		Kind:   domain.SymbolKindLabel,
+		Name:   "http_request_method",
+		Parent: "checkout_server_request_duration_seconds",
+	}
+	labelMigration := domain.Migration{
+		APIVersion: domain.MigrationAPIVersion,
+		Kind:       domain.MigrationKind,
+		Metadata:   domain.MigrationMetadata{Name: "labels"},
+		Changes: []domain.Change{{
+			ID:     "method",
+			Kind:   domain.ChangeKindLabelRename,
+			Domain: domain.DomainPrometheus,
+			From: domain.Symbol{
+				Domain: domain.DomainPrometheus,
+				Kind:   domain.SymbolKindLabel,
+				Name:   "http_method",
+				Parent: "checkout_server_request_duration_seconds",
+			},
+			To: &labelDestination,
+		}},
+	}
+	labelResult := evaluateForTest(t, labelMigration, discovery)
+	if got, want := labelResult.Summary.Status, StatusIncomplete; got != want {
+		t.Fatalf("label status = %q, want %q", got, want)
+	}
+	if got := findConsumerResult(t, labelResult, "remote-dashboard").Classification; got != ClassificationUncertain {
+		t.Fatalf("label classification = %q, want UNCERTAIN", got)
+	}
+}
+
 func TestEvaluateMetricRemovalBlocksReference(t *testing.T) {
 	t.Parallel()
 
@@ -82,6 +148,30 @@ func TestEvaluateMetricRemovalBlocksReference(t *testing.T) {
 	result := evaluateForTest(t, migration, transitiveDiscovery("checkout_request_duration_seconds_count"))
 	if got, want := result.Summary.Status, StatusBlocked; got != want {
 		t.Fatalf("Status = %q, want %q", got, want)
+	}
+}
+
+func TestTraceAttributeMatchingIsExactAndDomainScoped(t *testing.T) {
+	t.Parallel()
+
+	changed := domain.Symbol{Domain: domain.DomainOpenTelemetry, Kind: domain.SymbolKindSpanAttribute, Name: "http.method"}
+	for _, test := range []struct {
+		name      string
+		reference domain.Symbol
+		want      bool
+	}{
+		{name: "exact", reference: changed, want: true},
+		{name: "different scope", reference: domain.Symbol{Domain: domain.DomainOpenTelemetry, Kind: domain.SymbolKindResourceAttribute, Name: "http.method"}},
+		{name: "different domain", reference: domain.Symbol{Domain: domain.DomainTempo, Kind: domain.SymbolKindSpanAttribute, Name: "http.method"}},
+		{name: "metric suffix is not applied", reference: domain.Symbol{Domain: domain.DomainOpenTelemetry, Kind: domain.SymbolKindSpanAttribute, Name: "http.method_count"}},
+	} {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			if got := symbolsMatch(test.reference, changed); got != test.want {
+				t.Fatalf("symbolsMatch() = %t, want %t", got, test.want)
+			}
+		})
 	}
 }
 

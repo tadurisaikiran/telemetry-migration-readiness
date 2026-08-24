@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -86,6 +87,12 @@ func (loader Loader) Parse(source string, reader io.Reader) (domain.Discovery, e
 		if isKnownNonPrometheus(dataSource) {
 			continue
 		}
+		metadata := map[string]string{
+			"dashboard_uid":   dashboard.UID,
+			"dashboard_title": dashboard.Title,
+			"variable":        variable.Name,
+		}
+		addDashboardTags(metadata, dashboard.Tags)
 		consumer := domain.Consumer{
 			ID:          fmt.Sprintf("grafana:%s:%s:variable:%s:%d", source, dashboard.UID, variable.Name, index),
 			Kind:        domain.ConsumerKindQuery,
@@ -93,11 +100,7 @@ func (loader Loader) Parse(source string, reader io.Reader) (domain.Discovery, e
 			Source:      domain.SourceLocation{File: source},
 			Criticality: criticality,
 			Expression:  expression,
-			Metadata: map[string]string{
-				"dashboard_uid":   dashboard.UID,
-				"dashboard_title": dashboard.Title,
-				"variable":        variable.Name,
-			},
+			Metadata:    metadata,
 		}
 		loader.analyzeConsumer(consumer, dataSource, &discovery)
 	}
@@ -163,6 +166,14 @@ func (loader Loader) discoverPanel(
 		if refID == "" {
 			refID = strconv.Itoa(targetIndex)
 		}
+		metadata := map[string]string{
+			"dashboard_uid":   dashboard.UID,
+			"dashboard_title": dashboard.Title,
+			"panel_id":        strconv.Itoa(panel.ID),
+			"panel_title":     panel.Title,
+			"ref_id":          refID,
+		}
+		addDashboardTags(metadata, dashboard.Tags)
 		consumer := domain.Consumer{
 			ID:          fmt.Sprintf("grafana:%s:%s:panel:%d:%s", source, dashboard.UID, panel.ID, refID),
 			Kind:        domain.ConsumerKindDashboardPanel,
@@ -170,13 +181,7 @@ func (loader Loader) discoverPanel(
 			Source:      domain.SourceLocation{File: source},
 			Criticality: criticality,
 			Expression:  target.Expr,
-			Metadata: map[string]string{
-				"dashboard_uid":   dashboard.UID,
-				"dashboard_title": dashboard.Title,
-				"panel_id":        strconv.Itoa(panel.ID),
-				"panel_title":     panel.Title,
-				"ref_id":          refID,
-			},
+			Metadata:    metadata,
 		}
 		loader.analyzeConsumer(consumer, dataSource, discovery)
 	}
@@ -253,6 +258,31 @@ func dashboardCriticality(tags []string) domain.Criticality {
 		}
 	}
 	return domain.CriticalityMedium
+}
+
+func addDashboardTags(metadata map[string]string, tags []string) {
+	if len(tags) == 0 {
+		return
+	}
+	unique := make(map[string]struct{}, len(tags))
+	normalized := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		tag = strings.TrimSpace(tag)
+		if tag == "" {
+			continue
+		}
+		if _, exists := unique[tag]; exists {
+			continue
+		}
+		unique[tag] = struct{}{}
+		normalized = append(normalized, tag)
+	}
+	if len(normalized) == 0 {
+		return
+	}
+	sort.Strings(normalized)
+	encoded, _ := json.Marshal(normalized)
+	metadata["dashboard_tags"] = string(encoded)
 }
 
 func variableExpression(query json.RawMessage, definition string) string {

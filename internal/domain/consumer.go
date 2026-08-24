@@ -34,6 +34,7 @@ type Consumer struct {
 	Source      SourceLocation    `json:"source"`
 	Criticality Criticality       `json:"criticality"`
 	Owner       *Owner            `json:"owner,omitempty"`
+	Runtime     *RuntimeEvidence  `json:"runtime,omitempty"`
 	Expression  string            `json:"expression,omitempty"`
 	Metadata    map[string]string `json:"metadata,omitempty"`
 	Unresolved  bool              `json:"unresolved,omitempty"`

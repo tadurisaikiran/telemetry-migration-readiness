@@ -1,0 +1,17 @@
+{
+  "${service}_request_duration_seconds_count": {
+    "usage": {
+      "dashboards": [
+        {
+          "uid": "templated-latency",
+          "title": "Templated Latency",
+          "url": "https://perses.example.test/projects/shared/dashboards/templated-latency"
+        }
+      ],
+      "recordingRules": [],
+      "alertRules": []
+    },
+    "matchingMetrics": ["checkout_request_duration_seconds_count"],
+    "matchingRegexp": "^(.*)_request_duration_seconds_count$"
+  }
+}

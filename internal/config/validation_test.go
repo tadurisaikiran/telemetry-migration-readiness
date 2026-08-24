@@ -66,9 +66,16 @@ func TestValidateMigrationRules(t *testing.T) {
 		{
 			name: "unsupported domain",
 			mutate: func(migration *domain.Migration) {
-				migration.Changes[0].Domain = "opentelemetry"
+				migration.Changes[0].Domain = "unknown"
 			},
-			wantErr: `unsupported domain "opentelemetry"`,
+			wantErr: `unsupported domain "unknown"`,
+		},
+		{
+			name: "domain does not support change kind",
+			mutate: func(migration *domain.Migration) {
+				migration.Changes[0].Domain = domain.DomainOpenTelemetry
+			},
+			wantErr: `does not support change kind "metric_rename"`,
 		},
 		{
 			name: "rename without destination",
@@ -119,6 +126,32 @@ func TestValidateMigrationRules(t *testing.T) {
 			err := ValidateMigration(migration)
 			assertErrorContains(t, err, test.wantErr)
 		})
+	}
+}
+
+func TestValidateMigrationSupportsScopedTraceAttributeChanges(t *testing.T) {
+	t.Parallel()
+
+	for _, change := range []domain.Change{
+		traceAttributeChange(domain.ChangeKindSpanAttributeRename, domain.SymbolKindSpanAttribute),
+		traceAttributeChange(domain.ChangeKindResourceAttributeRename, domain.SymbolKindResourceAttribute),
+	} {
+		migration := validMigration()
+		migration.Changes = []domain.Change{change}
+		if err := ValidateMigration(migration); err != nil {
+			t.Fatalf("ValidateMigration(%s) error = %v", change.Kind, err)
+		}
+	}
+}
+
+func traceAttributeChange(kind domain.ChangeKind, symbolKind domain.SymbolKind) domain.Change {
+	destination := domain.Symbol{Domain: domain.DomainOpenTelemetry, Kind: symbolKind, Name: "new.attribute"}
+	return domain.Change{
+		ID:     "trace-attribute",
+		Kind:   kind,
+		Domain: domain.DomainOpenTelemetry,
+		From:   domain.Symbol{Domain: domain.DomainOpenTelemetry, Kind: symbolKind, Name: "old.attribute"},
+		To:     &destination,
 	}
 }
 

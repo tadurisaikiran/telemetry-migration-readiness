@@ -11,9 +11,10 @@ those migrations before backward compatibility is removed.
 
 ## Current status
 
-The deterministic Prometheus v0.1 engine is implemented through the reporting
-milestone. It works entirely from local files and does not require AI, a
-database, a network connection, or a hosted service.
+The deterministic Prometheus v0.1 engine is implemented through the ecosystem
+integration milestones. Its local adapters do not require AI, a database, a
+network connection, or a hosted service; remote evidence sources are explicit
+and optional.
 
 Implemented:
 
@@ -26,7 +27,22 @@ Implemented:
 - Cycle-safe transitive dependency graphs through recording rules.
 - Fail-closed `READY`, `BLOCKED`, and `INCOMPLETE` decisions.
 - Console, versioned JSON, Markdown, and graph JSON output.
-- `analyze`, `validate`, `explain`, and `graph` CLI commands.
+- `analyze`, `advise`, `remediate`, `validate`, `explain`, and `graph` CLI
+  commands.
+- Optional OpenTelemetry Weaver V1/V2 registry-diff import with mandatory,
+  explicit Prometheus backend mappings.
+- Optional Perses metrics-usage HTTP evidence for dashboards, recording rules,
+  alert rules, partial metrics, and pending usage.
+- Optional read-only AI explanations through a provider-neutral local process;
+  deterministic readiness remains authoritative.
+- Candidate-only AI remediation for local Prometheus YAML and Grafana JSON,
+  validated by parsing, adapter reload, graph rebuild, and readiness reanalysis.
+- Optional advisory ownership discovery from explicit repository metadata,
+  GitHub CODEOWNERS, and conventional Grafana tags.
+- Optional runtime PromQL evidence from bounded Prometheus query logs and a
+  provider-neutral, versioned JSONL history format.
+- Optional Tempo-validated TraceQL evidence for explicitly mapped
+  OpenTelemetry span and resource attribute migrations.
 - A pinned live Prometheus/Grafana/Sloth migration lifecycle that verifies
   predictions against runtime behavior.
 
@@ -108,12 +124,137 @@ spec:
 See [the migration model](docs/MIGRATION_MODEL.md) for the complete implemented
 schema and validation rules.
 
+## Weaver registry diffs
+
+Weaver can be used as an alternative change source when an explicit backend
+mapping is available:
+
+```bash
+tmr analyze \
+  --config ./tmr.yaml \
+  --weaver-diff ./weaver-diff.json \
+  --weaver-mapping ./weaver-mapping.yaml
+```
+
+TMR never assumes that an OpenTelemetry identifier maps directly to a
+Prometheus name. See [the Weaver integration guide](docs/WEAVER.md).
+
+## Perses metrics-usage evidence
+
+TMR can augment local discovery from a separately deployed Perses
+metrics-usage service:
+
+```yaml
+sources:
+  persesUsage:
+    - url: https://metrics-usage.example.com
+      required: true
+      timeout: 10s
+      bearerTokenEnv: TMR_PERSES_TOKEN
+```
+
+The adapter consumes the documented API only; Perses is not a TMR dependency.
+See [the Perses metrics-usage integration guide](docs/PERSES.md).
+
+## Consumer ownership
+
+An opt-in `ownership` section can enrich blockers and uncertainties from
+explicit TMR metadata, GitHub CODEOWNERS, and Grafana `team:`/`owner:` tags.
+Ownership provenance and ambiguity remain visible in JSON and optional AI
+explanations, but ownership never changes readiness. See
+[the ownership discovery guide](docs/OWNERSHIP.md).
+
+## Runtime query evidence
+
+TMR can add observed PromQL executions to configured dashboards, rules, and
+SLOs without treating an empty history as proof of non-use:
+
+```yaml
+sources:
+  runtimeQueries:
+    - path: ./evidence/prometheus-query.log
+      format: prometheus_query_log
+      window: 168h
+      criticality: high
+      required: true
+```
+
+Each expression is parsed with the official PromQL parser and reported with a
+deterministic execution count, first/last observation, origin, and evidence
+window. The window is anchored to the newest valid record in the file rather
+than the machine clock, so the same input produces the same result later. See
+[the runtime query evidence guide](docs/RUNTIME_EVIDENCE.md).
+
+## Tempo and TraceQL evidence
+
+TMR can analyze strict local TraceQL consumer manifests while asking a
+configured Tempo deployment to validate each expression with its official
+parser:
+
+```yaml
+sources:
+  tempoQueries:
+    - url: https://tempo.example.com
+      path: ./trace-queries/*.yaml
+      required: true
+      timeout: 60s
+      bearerTokenEnv: TMR_TEMPO_TOKEN
+mappings:
+  traceAttributes:
+    - scope: span
+      opentelemetry: http.request.method
+      tempo: http.method
+```
+
+OpenTelemetry and Tempo remain separate domains; similar attribute names do
+not create a dependency. Required validation, mapping, or source failures stop
+`READY`. See [the Tempo and TraceQL guide](docs/TEMPO.md).
+
+## Optional AI explanations
+
+AI is disabled unless `tmr advise` is given an explicit local provider
+executable:
+
+```bash
+tmr advise \
+  --config ./tmr.yaml \
+  --migration ./migration.yaml \
+  --question "Why is this blocked, and what should migrate first?" \
+  --ai-command ./my-tmr-ai-provider
+```
+
+TMR sends a bounded, redacted JSON evidence packet over standard input and
+accepts one strict JSON explanation on standard output. The provider cannot
+return a readiness status or a patch. `advise` preserves the deterministic
+exit code, so a useful explanation of a blocked migration still exits `2`.
+See [the AI explanation protocol](docs/AI_AGENT.md) and
+[threat model](docs/THREAT_MODEL.md).
+
+## Validated candidate remediation
+
+An explicit provider can propose a replacement for a confirmed local legacy
+expression:
+
+```bash
+tmr remediate \
+  --config ./tmr.yaml \
+  --migration ./migration.yaml \
+  --ai-command ./my-tmr-ai-provider
+```
+
+TMR labels output as a validated candidate only after the official PromQL
+parser proves the legacy reference is gone and the destination is present, the
+in-memory YAML or Grafana JSON artifact reparses through its adapter, and the
+dependency graph/readiness engine succeeds on the simulated artifact. It never
+writes the source file. See [the remediation protocol](docs/REMEDIATION.md).
+
 ## Design principles
 
 - Deterministic analysis owns facts and safety decisions.
 - Parsing or adapter failures must never be interpreted as absence of risk.
 - TMR remains useful without an LLM, network connection, database, or hosted
   service.
+- AI output is explanatory and can neither weaken evidence nor change status.
 - Telemetry domains remain separate unless an explicit mapping connects them.
 - Every dependency finding retains evidence and provenance.
 
@@ -121,8 +262,15 @@ The architecture and milestone boundaries are documented in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The mandatory verification plan is
 documented in [docs/TESTING.md](docs/TESTING.md).
 
+For a problem-first explanation of the migration lifecycle, read
+[When Telemetry Migrations Fail Silently](docs/articles/when-telemetry-migrations-fail-silently.md).
+
 See [the roadmap](docs/ROADMAP.md), [contribution guide](CONTRIBUTING.md), and
 [security policy](SECURITY.md) before proposing or reporting work.
+
+Engineers evaluating a real migration can use the
+[design-user program guide](docs/DESIGN_USER_PROGRAM.md) and submit only
+sanitized findings through the design-user feedback issue form.
 
 ## Development
 

@@ -10,7 +10,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/tadurisaikiran/telemetry-migration-readiness/internal/domain"
 	"github.com/tadurisaikiran/telemetry-migration-readiness/internal/graph"
+	"github.com/tadurisaikiran/telemetry-migration-readiness/internal/ownership"
 	"github.com/tadurisaikiran/telemetry-migration-readiness/internal/readiness"
 )
 
@@ -38,6 +40,9 @@ func Console(writer io.Writer, result readiness.Result) error {
 	}
 	fmt.Fprintln(&output)
 	fmt.Fprintf(&output, "Consumers scanned: %d\n", result.Summary.TotalConsumers)
+	if runtimeCount := runtimeConsumerCount(result); runtimeCount != 0 {
+		fmt.Fprintf(&output, "Runtime-observed:  %d (additive evidence)\n", runtimeCount)
+	}
 	fmt.Fprintf(&output, "Migrated:          %d\n", result.Summary.Migrated)
 	fmt.Fprintf(&output, "Legacy only:       %d\n", result.Summary.LegacyOnly)
 	fmt.Fprintf(&output, "Dual-compatible:   %d\n", result.Summary.Dual)
@@ -50,6 +55,12 @@ func Console(writer io.Writer, result readiness.Result) error {
 		fmt.Fprintln(&output, "\nBLOCKERS")
 		for _, finding := range blockers {
 			fmt.Fprintf(&output, "  - %s [%s] (%s)\n", finding.name, finding.changeID, formatLocation(finding.file, finding.line))
+			if finding.owner != "" {
+				fmt.Fprintf(&output, "    Owner: %s\n", finding.owner)
+			}
+			if finding.runtime != "" {
+				fmt.Fprintf(&output, "    Runtime: %s\n", finding.runtime)
+			}
 			if finding.path != "" {
 				fmt.Fprintf(&output, "    Path: %s\n", finding.path)
 			}
@@ -61,6 +72,12 @@ func Console(writer io.Writer, result readiness.Result) error {
 		fmt.Fprintln(&output, "\nUNCERTAIN")
 		for _, finding := range uncertain {
 			fmt.Fprintf(&output, "  - %s [%s] (%s)\n", finding.name, finding.changeID, formatLocation(finding.file, finding.line))
+			if finding.owner != "" {
+				fmt.Fprintf(&output, "    Owner: %s\n", finding.owner)
+			}
+			if finding.runtime != "" {
+				fmt.Fprintf(&output, "    Runtime: %s\n", finding.runtime)
+			}
 		}
 	}
 
@@ -87,6 +104,9 @@ func Markdown(writer io.Writer, result readiness.Result) error {
 	fmt.Fprintf(&output, "\n**Migration:** `%s`  \n", result.Migration.Metadata.Name)
 	fmt.Fprintf(&output, "**Status:** **%s**  \n", result.Summary.Status)
 	fmt.Fprintf(&output, "**Progress:** %d%% _(informational only)_\n", result.Summary.Progress)
+	if runtimeCount := runtimeConsumerCount(result); runtimeCount != 0 {
+		fmt.Fprintf(&output, "**Runtime-observed consumers:** %d _(additive evidence)_\n", runtimeCount)
+	}
 	fmt.Fprintln(&output, "\n| Classification | Consumers |")
 	fmt.Fprintln(&output, "| --- | ---: |")
 	fmt.Fprintf(&output, "| Migrated | %d |\n", result.Summary.Migrated)
@@ -109,6 +129,12 @@ func Markdown(writer io.Writer, result readiness.Result) error {
 		fmt.Fprintf(&output, "\n## %s\n", section.title)
 		for _, item := range items {
 			fmt.Fprintf(&output, "\n- **%s** (`%s`) — %s\n", item.name, item.changeID, formatLocation(item.file, item.line))
+			if item.owner != "" {
+				fmt.Fprintf(&output, "  - Owner: %s\n", item.owner)
+			}
+			if item.runtime != "" {
+				fmt.Fprintf(&output, "  - Runtime: %s\n", item.runtime)
+			}
 			if item.path != "" {
 				fmt.Fprintf(&output, "  - Dependency path: `%s`\n", item.path)
 			}
@@ -148,6 +174,8 @@ type finding struct {
 	file     string
 	line     int
 	path     string
+	owner    string
+	runtime  string
 }
 
 func findings(result readiness.Result, classification readiness.Classification) []finding {
@@ -167,6 +195,8 @@ func findings(result readiness.Result, classification readiness.Classification) 
 				file:     consumer.Consumer.Source.File,
 				line:     consumer.Consumer.Source.Line,
 				path:     path,
+				owner:    ownerLabel(consumer.Consumer),
+				runtime:  runtimeLabel(consumer.Consumer),
 			})
 		}
 	}
@@ -177,6 +207,44 @@ func findings(result readiness.Result, classification readiness.Classification) 
 		return resultFindings[i].name < resultFindings[j].name
 	})
 	return resultFindings
+}
+
+func runtimeConsumerCount(result readiness.Result) int {
+	observed := make(map[string]struct{})
+	for _, change := range result.Changes {
+		for _, consumer := range change.Consumers {
+			if consumer.Consumer.Runtime != nil {
+				observed[consumer.Consumer.ID] = struct{}{}
+			}
+		}
+	}
+	return len(observed)
+}
+
+func runtimeLabel(consumer domain.Consumer) string {
+	if consumer.Runtime == nil {
+		return ""
+	}
+	return fmt.Sprintf(
+		"%d execution(s), last %s, window %s",
+		consumer.Runtime.ExecutionCount,
+		consumer.Runtime.LastSeen,
+		consumer.Runtime.Window,
+	)
+}
+
+func ownerLabel(consumer domain.Consumer) string {
+	if consumer.Owner != nil {
+		return consumer.Owner.Name
+	}
+	candidates := ownership.Candidates(consumer)
+	if len(candidates) != 0 {
+		return "ambiguous: " + strings.Join(candidates, ", ")
+	}
+	if ownership.Unassigned(consumer) {
+		return "unassigned by CODEOWNERS"
+	}
+	return ""
 }
 
 func formatLocation(file string, line int) string {

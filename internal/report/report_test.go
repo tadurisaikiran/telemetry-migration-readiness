@@ -37,12 +37,28 @@ func TestRenderersPreserveStatusEvidenceAndPaths(t *testing.T) {
 			if err := render(&output, result); err != nil {
 				t.Fatalf("render error = %v", err)
 			}
-			for _, expected := range []string{"BLOCKED", "CheckoutLatencyHigh", "checkout_request_duration_seconds", "checkout:p95_latency"} {
+			for _, expected := range []string{"BLOCKED", "CheckoutLatencyHigh", "Checkout Platform", "Runtime-observed", "12 execution(s)", "checkout_request_duration_seconds", "checkout:p95_latency"} {
 				if !strings.Contains(output.String(), expected) {
 					t.Errorf("output does not contain %q:\n%s", expected, output.String())
 				}
 			}
 		})
+	}
+}
+
+func TestRuntimeConsumerCountIsUniqueAcrossAllChanges(t *testing.T) {
+	t.Parallel()
+
+	runtimeConsumer := domain.Consumer{ID: "runtime", Runtime: &domain.RuntimeEvidence{ExecutionCount: 1}}
+	result := readiness.Result{Changes: []readiness.ChangeResult{
+		{Consumers: []readiness.ConsumerResult{{Consumer: runtimeConsumer}}},
+		{Consumers: []readiness.ConsumerResult{
+			{Consumer: runtimeConsumer},
+			{Consumer: domain.Consumer{ID: "second-runtime", Runtime: &domain.RuntimeEvidence{ExecutionCount: 1}}},
+		}},
+	}}
+	if got, want := runtimeConsumerCount(result), 2; got != want {
+		t.Fatalf("runtimeConsumerCount() = %d, want %d", got, want)
 	}
 }
 
@@ -82,6 +98,13 @@ func fixtureResult() readiness.Result {
 		Name:        "CheckoutLatencyHigh",
 		Source:      domain.SourceLocation{File: "rules/checkout.yaml", Line: 12},
 		Criticality: domain.CriticalityCritical,
+		Owner:       &domain.Owner{Name: "Checkout Platform", Email: "checkout@example.com"},
+		Runtime: &domain.RuntimeEvidence{
+			Format: "prometheus_query_log", ExecutionCount: 12,
+			FirstSeen: "2026-08-24T10:00:00Z", LastSeen: "2026-08-24T12:00:00Z",
+			Window: "24h0m0s", WindowStart: "2026-08-23T12:00:00Z", WindowAnchor: "2026-08-24T12:00:00Z",
+			Origins: []string{"prometheus_api"},
+		},
 	}
 	oldSymbol := domain.Symbol{Domain: domain.DomainPrometheus, Kind: domain.SymbolKindMetric, Name: "checkout_request_duration_seconds"}
 	newSymbol := domain.Symbol{Domain: domain.DomainPrometheus, Kind: domain.SymbolKindMetric, Name: "checkout_server_request_duration_seconds"}

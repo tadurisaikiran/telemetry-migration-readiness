@@ -1,7 +1,8 @@
 # Migration Model
 
-The migration manifest explicitly describes a backend telemetry change. The
-only supported domain in the current milestone is `prometheus`.
+The migration manifest explicitly describes a backend telemetry change.
+Implemented domains are `prometheus`, `opentelemetry`, and `tempo`; symbols in
+different domains never match without explicit mapping evidence.
 
 ## Envelope
 
@@ -75,6 +76,35 @@ labels must differ.
 
 The parent `metric` and source label are required. `to` must be omitted.
 
+## Span attribute rename or removal
+
+```yaml
+- id: span-http-method
+  kind: span_attribute_rename
+  domain: opentelemetry
+  from:
+    attribute: http.method
+  to:
+    attribute: http.request.method
+```
+
+Use `span_attribute_remove` and omit `to` for a removal. A backend-native Tempo
+change can use `domain: tempo`; an OpenTelemetry change needs explicit mappings
+before Tempo evidence can affect it.
+
+## Resource attribute rename or removal
+
+```yaml
+- id: resource-zone
+  kind: resource_attribute_remove
+  domain: opentelemetry
+  from:
+    attribute: cloud.availability_zone
+```
+
+Use `resource_attribute_rename` with a distinct `to.attribute` for a rename.
+Span and resource scopes are different symbol kinds and never match each other.
+
 ## Validation contract
 
 Validation rejects:
@@ -89,6 +119,10 @@ Validation rejects:
 - a label change without its parent metric;
 - identical source and destination names;
 - metric fields in a label endpoint or label fields in a metric endpoint;
+- metric or label fields in an attribute endpoint, and attribute fields in a
+  metric or label endpoint;
+- a Prometheus change kind in an OpenTelemetry/Tempo domain or an attribute
+  change kind in the Prometheus domain;
 - unknown YAML fields, multiple documents, and manifests larger than 1 MiB.
 
 Prometheus identifier grammar is not validated yet. That belongs with the
@@ -97,6 +131,7 @@ Prometheus parsing milestone; the current contract requires non-empty names.
 ## Canonical representation
 
 Decoded endpoints become canonical symbols with an explicit domain and kind.
-For a label, `Symbol.Parent` records the parent metric. Removals have a nil
-destination. YAML-specific structs remain private to the config package so
-future change sources can produce the same domain model without mimicking YAML.
+For a label, `Symbol.Parent` records the parent metric. Trace attributes have
+an explicit span/resource kind and no parent. Removals have a nil destination.
+YAML-specific structs remain private to the config package so future change
+sources can produce the same domain model without mimicking YAML.

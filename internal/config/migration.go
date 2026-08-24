@@ -41,8 +41,9 @@ type changeDocument struct {
 }
 
 type symbolDocument struct {
-	Metric string `yaml:"metric"`
-	Label  string `yaml:"label"`
+	Metric    string `yaml:"metric"`
+	Label     string `yaml:"label"`
+	Attribute string `yaml:"attribute"`
 }
 
 // LoadMigration reads and validates one migration manifest from path.
@@ -155,9 +156,12 @@ func (document symbolDocument) toDomain(
 ) domain.Symbol {
 	name := document.Metric
 	parent := ""
-	if kind == domain.SymbolKindLabel {
+	switch kind {
+	case domain.SymbolKindLabel:
 		name = document.Label
 		parent = parentMetric
+	case domain.SymbolKindSpanAttribute, domain.SymbolKindResourceAttribute:
+		name = document.Attribute
 	}
 
 	return domain.Symbol{
@@ -184,6 +188,12 @@ func validateDocumentShape(document migrationDocument) *ValidationError {
 			if change.To != nil && change.To.Label != "" {
 				issues.add(path+".to.label", "is only valid for a label change")
 			}
+			if change.From.Attribute != "" {
+				issues.add(path+".from.attribute", "is only valid for an attribute change")
+			}
+			if change.To != nil && change.To.Attribute != "" {
+				issues.add(path+".to.attribute", "is only valid for an attribute change")
+			}
 
 		case domain.ChangeKindLabelRename, domain.ChangeKindLabelRemove:
 			if change.From.Metric != "" {
@@ -191,6 +201,32 @@ func validateDocumentShape(document migrationDocument) *ValidationError {
 			}
 			if change.To != nil && change.To.Metric != "" {
 				issues.add(path+".to.metric", "is only valid for a metric change")
+			}
+			if change.From.Attribute != "" {
+				issues.add(path+".from.attribute", "is only valid for an attribute change")
+			}
+			if change.To != nil && change.To.Attribute != "" {
+				issues.add(path+".to.attribute", "is only valid for an attribute change")
+			}
+
+		case domain.ChangeKindSpanAttributeRename,
+			domain.ChangeKindSpanAttributeRemove,
+			domain.ChangeKindResourceAttributeRename,
+			domain.ChangeKindResourceAttributeRemove:
+			if change.Metric != "" {
+				issues.add(path+".metric", "is only valid for a label change")
+			}
+			if change.From.Metric != "" {
+				issues.add(path+".from.metric", "is only valid for a metric change")
+			}
+			if change.From.Label != "" {
+				issues.add(path+".from.label", "is only valid for a label change")
+			}
+			if change.To != nil && change.To.Metric != "" {
+				issues.add(path+".to.metric", "is only valid for a metric change")
+			}
+			if change.To != nil && change.To.Label != "" {
+				issues.add(path+".to.label", "is only valid for a label change")
 			}
 		}
 	}

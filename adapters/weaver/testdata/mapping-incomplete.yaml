@@ -1,0 +1,32 @@
+apiVersion: tmr.weaver/v1alpha1
+kind: WeaverMapping
+metadata:
+  name: incomplete-http-migration
+spec:
+  mappings:
+    - id: http-method-label
+      weaver:
+        kind: attribute
+        type: renamed
+        from: http.method
+        to: http.request.method
+      prometheus:
+        kind: label_rename
+        metric: http_server_request_duration_seconds
+        from:
+          label: http_method
+        to:
+          label: http_request_method
+
+    - id: http-server-duration
+      weaver:
+        kind: metric
+        type: renamed
+        from: http.server.duration
+        to: http.server.request.duration
+      prometheus:
+        kind: metric_rename
+        from:
+          metric: http_server_duration_seconds
+        to:
+          metric: http_server_request_duration_seconds

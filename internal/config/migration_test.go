@@ -92,6 +92,44 @@ func TestParseMigrationRejectsMultipleDocuments(t *testing.T) {
 	assertErrorContains(t, err, "must contain exactly one YAML document")
 }
 
+func TestParseMigrationSupportsTraceAttributeChanges(t *testing.T) {
+	t.Parallel()
+
+	migration, err := ParseMigration(strings.NewReader(`apiVersion: telemetry-migration/v1alpha1
+kind: Migration
+metadata:
+  name: trace-attributes
+spec:
+  changes:
+    - id: span-method
+      kind: span_attribute_rename
+      domain: opentelemetry
+      from:
+        attribute: http.method
+      to:
+        attribute: http.request.method
+    - id: resource-zone
+      kind: resource_attribute_remove
+      domain: tempo
+      from:
+        attribute: cloud.availability_zone
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := len(migration.Changes), 2; got != want {
+		t.Fatalf("changes = %d, want %d", got, want)
+	}
+	if migration.Changes[0].From.Kind != domain.SymbolKindSpanAttribute || migration.Changes[0].To == nil ||
+		migration.Changes[0].To.Name != "http.request.method" {
+		t.Fatalf("span change = %#v", migration.Changes[0])
+	}
+	if migration.Changes[1].From.Domain != domain.DomainTempo || migration.Changes[1].From.Kind != domain.SymbolKindResourceAttribute ||
+		migration.Changes[1].To != nil {
+		t.Fatalf("resource change = %#v", migration.Changes[1])
+	}
+}
+
 func TestParseMigrationRejectsEmptyInput(t *testing.T) {
 	t.Parallel()
 

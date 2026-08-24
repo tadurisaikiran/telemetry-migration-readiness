@@ -17,21 +17,24 @@ The local deterministic pipeline described below is implemented today.
 3. Formal parsers take precedence over regular expressions and model inference.
 4. Missing, malformed, or unresolved required evidence fails closed.
 5. Every dependency finding retains its evidence and source location.
-6. Prometheus and OpenTelemetry are separate domains. Similar names do not
-   establish a mapping.
+6. Prometheus, OpenTelemetry, Tempo, and Loki are separate domains. Similar
+   names do not establish a mapping.
 7. External systems enter through adapters and do not shape the core model.
 8. The core remains local-first and does not phone home.
 
 ## Implemented deterministic pipeline
 
 ```text
-migration + source configuration
+explicit migration or mapped Weaver diff + source configuration
              |
              v
-strict validation and local adapters
+strict validation and local/remote evidence adapters
              |
              v
-official PromQL AST reference extraction
+official PromQL AST / Tempo-validated TraceQL reference extraction
+             |
+             v
+advisory ownership enrichment
              |
              v
 in-memory dependency graph
@@ -43,7 +46,24 @@ deterministic impact + readiness policy
 console / JSON / Markdown reports
 ```
 
-`internal/config` owns YAML-specific document structs. It rejects unknown
+An explicitly enabled explanation path begins only after that pipeline has
+finished:
+
+```text
+authoritative readiness result
+             |
+             v
+minimal redacted evidence packet
+             |
+             v
+optional local AI provider process
+             |
+             v
+non-authoritative explanation + unchanged status
+```
+
+`internal/config` owns YAML-specific migration and configuration document
+structs. It rejects unknown
 fields, multiple YAML documents, oversized input, and invalid change shapes.
 It then normalizes the document into `internal/domain` and applies reusable
 domain validation.
@@ -52,12 +72,46 @@ domain validation.
 references, evidence, productions, diagnostics, source locations, and owners.
 Adapter-specific document shapes never leak into this package.
 
-`adapters` normalizes Prometheus rule YAML, PrometheusRule CRDs, Grafana
+`adapters/weaver` consumes current structured Weaver V1/V2 registry diffs and
+requires explicit OpenTelemetry-to-Prometheus mappings. Missing mappings stop
+the pipeline before readiness evaluation. It neither invokes Weaver nor infers
+backend names.
+
+The consumer adapters normalize Prometheus rule YAML, PrometheusRule CRDs, Grafana
 dashboard JSON, Sloth SLO YAML, and Pyrra SLO YAML. Malformed or unresolved
 required input becomes a diagnostic rather than evidence of absence.
 
+`adapters/persesusage` is an optional remote evidence boundary around the
+Perses metrics-usage HTTP API. It imports usage associations, then independently
+parses returned rule expressions and models recording-rule productions. It
+does not import Perses packages or allow remote data to decide readiness.
+Missing dashboard query details and partial metric names remain scoped,
+unresolved evidence.
+
+`adapters/runtimequeries` imports bounded local JSONL evidence from the
+Prometheus query log or TMR's provider-neutral runtime-query schema. It
+aggregates identical expressions inside a window anchored to the newest valid
+record, then sends every distinct expression through the same official PromQL
+AST analyzer. Runtime consumers are additive: the adapter never removes a
+configured consumer or interprets an absent observation as evidence of safety.
+See [the runtime query evidence guide](RUNTIME_EVIDENCE.md).
+
+`adapters/tempo` loads a strict local query inventory and submits each TraceQL
+expression to the configured Tempo Search API for official parser validation.
+Only then does `pkg/traceql` conservatively extract scoped span/resource
+attributes. Explicit mappings add parallel OpenTelemetry symbols; no name-based
+alias is inferred. Tempo remains an optional remote adapter, and its AGPL parser
+is not linked into TMR's Apache-licensed binary. See [the Tempo integration
+guide](TEMPO.md).
+
 `pkg/promql` uses Prometheus's official parser and walks the typed AST. It does
 not use substring matching to establish metric or label dependencies.
+
+`internal/ownership` runs after consumer discovery and before graph
+construction. It applies strict TMR ownership metadata, GitHub CODEOWNERS, and
+Grafana tag evidence with fixed precedence. It enriches `domain.Consumer` only;
+its diagnostics are advisory and it has no dependency on `internal/readiness`.
+See [the ownership discovery guide](OWNERSHIP.md).
 
 `internal/graph`, `internal/impact`, and `internal/readiness` form the safety
 core. The graph is rebuilt in memory for every run, traversal is cycle-safe,
@@ -69,12 +123,27 @@ machine API for Actions and future optional integrations. Exit codes are part
 of the public contract. Progress percentages remain informational and never
 establish safety.
 
+`internal/explanation` builds a minimal packet containing only blockers,
+uncertainties, diagnostics, migration changes, and aggregate counts. It invokes
+a user-selected executable directly through a strict JSON protocol, with no
+shell and no provider SDK. The response schema has no status or patch field,
+unknown fields are rejected, and rendering repeats the deterministic status on
+both sides of provider-authored prose. This package cannot call the readiness
+evaluator with modified evidence.
+
+`internal/remediation` is a separate candidate-only boundary. It exposes only
+confirmed direct local Prometheus-rule YAML and Grafana JSON expressions as
+targets. Provider proposals cannot select a source path or locator. TMR finds
+one exact scalar, changes an in-memory artifact, reparses it through the owning
+adapter, replaces that source's discovery in memory, rebuilds the graph, and
+reruns the same readiness policy. The source file and authoritative result are
+never mutated; simulated status is validation evidence, not current state.
+
 ## Next architectural layers
 
-- OpenTelemetry, trace, and log analysis.
-- AI explanation or remediation.
-- Runtime evidence, APIs, MCP, and server/UI modes.
-- The live end-to-end stack described in `TESTING.md`.
+- Log and Collector configuration analysis.
+- APIs, MCP, and server/UI modes.
+- Additional live end-to-end tiers described in `TESTING.md`.
 
 These remain adapters or optional consumers of the deterministic engine. None
 may weaken or override its readiness result.

@@ -16,10 +16,10 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           check-latest: true
@@ -45,8 +45,17 @@ jobs:
       - name: Test with race detector
         run: go test -race ./...
 
-      - name: PromQL fuzz smoke test
-        run: go test ./pkg/promql -run=^$ -fuzz=FuzzAnalyze -fuzztime=5s
+      - name: Parser fuzz smoke tests
+        run: |
+          go test ./pkg/promql -run=^$ -fuzz=FuzzAnalyze -fuzztime=5s
+          go test ./pkg/traceql -run=^$ -fuzz=FuzzAnalyzeDoesNotPanic -fuzztime=5s
+          go test ./adapters/weaver -run=^$ -fuzz=FuzzParseDiffDoesNotPanic -fuzztime=3s
+          go test ./adapters/weaver -run=^$ -fuzz=FuzzParseMappingDoesNotPanic -fuzztime=3s
+          go test ./adapters/persesusage -run=^$ -fuzz=FuzzDecodeMetricsDoesNotPanic -fuzztime=3s
+          go test ./adapters/runtimequeries -run=^$ -fuzz=FuzzDecodePrometheusQueryLog -fuzztime=3s
+          go test ./adapters/runtimequeries -run=^$ -fuzz=FuzzDecodeTMRQueryHistory -fuzztime=3s
+          go test ./internal/explanation -run=^$ -fuzz=FuzzDecodeResponseDoesNotPanic -fuzztime=3s
+          go test ./internal/remediation -run=^$ -fuzz=FuzzDecodeResponseDoesNotPanic -fuzztime=3s
 
       - name: Check reachable Go vulnerabilities
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...

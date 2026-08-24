@@ -13,7 +13,7 @@ func TestParseDiscoversNestedPanelsAndFailsClosedOnTemplate(t *testing.T) {
 	dashboard := `{
   "uid": "checkout",
   "title": "Checkout",
-  "tags": ["critical"],
+  "tags": ["critical", "team:checkout", "critical"],
   "panels": [{
     "id": 1,
     "title": "row",
@@ -37,6 +37,9 @@ func TestParseDiscoversNestedPanelsAndFailsClosedOnTemplate(t *testing.T) {
 	}
 	if got, want := discovery.Consumers[0].Criticality, domain.CriticalityCritical; got != want {
 		t.Errorf("Criticality = %q, want %q", got, want)
+	}
+	if got, want := discovery.Consumers[0].Metadata["dashboard_tags"], `["critical","team:checkout"]`; got != want {
+		t.Errorf("dashboard_tags = %q, want %q", got, want)
 	}
 	if got, want := len(discovery.Diagnostics), 1; got != want {
 		t.Fatalf("len(Diagnostics) = %d, want %d", got, want)

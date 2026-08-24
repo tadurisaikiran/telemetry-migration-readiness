@@ -1,0 +1,39 @@
+{
+  "head_schema_url": {
+    "url": "https://opentelemetry.io/schemas/1.40.0"
+  },
+  "baseline_schema_url": {
+    "url": "https://opentelemetry.io/schemas/1.39.0"
+  },
+  "registry": {
+    "attribute_changes": [
+      {
+        "type": "renamed",
+        "old_name": "http.method",
+        "new_name": "http.request.method",
+        "note": "Use the stable HTTP request attribute."
+      },
+      {
+        "type": "added",
+        "name": "http.request.resend_count"
+      }
+    ],
+    "attribute_group_changes": [],
+    "entity_changes": [],
+    "event_changes": [],
+    "metric_changes": [
+      {
+        "type": "renamed",
+        "old_name": "http.server.duration",
+        "new_name": "http.server.request.duration",
+        "note": "Use the request duration metric."
+      },
+      {
+        "type": "obsoleted",
+        "name": "rpc.client.duration",
+        "note": "No replacement in this registry."
+      }
+    ],
+    "span_changes": []
+  }
+}

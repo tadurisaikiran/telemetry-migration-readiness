@@ -17,16 +17,17 @@ if [[ -z "${TMR_BIN:-}" ]]; then
   (cd "${repo_dir}" && go build -trimpath -o "${tmr_bin}" ./cmd/tmr)
 fi
 
-run_tmr() {
+run_analysis() {
   local expected=$1
   local expected_exit=$2
+  shift 2
   local report_file
   report_file=$(mktemp)
   set +e
   (cd "${repo_dir}" && "${tmr_bin}" analyze \
     --config "${TMR_SCENARIO_DIR}/tmr.yaml" \
-    --migration e2e/migrations/metric-rename.yml \
-    --format json --output "${report_file}")
+    --format json --output "${report_file}" \
+    "$@")
   local actual_exit=$?
   set -e
   if [[ "${actual_exit}" -ne "${expected_exit}" ]]; then
@@ -37,6 +38,16 @@ run_tmr() {
     printf 'TMR did not report %s for %s\n' "${expected}" "${TMR_SCENARIO_DIR}" >&2
     return 1
   fi
+}
+
+run_tmr() {
+  run_analysis "$1" "$2" --migration e2e/migrations/metric-rename.yml
+}
+
+run_weaver_tmr() {
+  run_analysis "$1" "$2" \
+    --weaver-diff e2e/weaver/diff-v2.json \
+    --weaver-mapping e2e/weaver/mapping.yaml
 }
 
 run_scenario() {
@@ -65,6 +76,7 @@ run_scenario() {
 
   if [[ "${expected_status}" != "BASELINE" ]]; then
     run_tmr "${expected_status}" "${expected_exit}"
+    run_weaver_tmr "${expected_status}" "${expected_exit}"
   fi
 
   "${compose[@]}" up --detach --build exporter prometheus grafana

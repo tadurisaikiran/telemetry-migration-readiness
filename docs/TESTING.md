@@ -3,14 +3,47 @@
 Testing is part of the safety contract. A parser or adapter error must never be
 mistaken for evidence that a dependency does not exist.
 
+The optional AI explanation boundary is tested as an adversarial protocol:
+status fields and unknown consumer IDs are rejected, provider timeouts and
+oversized output are bounded, secrets are redacted, terminal controls are
+removed, stable risk ordering is asserted, and CLI tests prove that model prose
+cannot change readiness exit codes.
+
+Candidate remediation adds independent query, YAML, dashboard, and full graph
+tests. Adversarial cases cover invalid PromQL, retained legacy references,
+missing destinations, secret-like provider text, duplicate or unknown targets,
+ambiguous artifact scalars, response status/patch claims, timeouts, oversized
+process output, and proof that source files remain byte-for-byte unchanged.
+
+Ownership discovery has parser, wildcard, source-order, last-match, precedence,
+joint-owner, ambiguity, determinism, and fuzz coverage. An integration invariant
+compares ownership-disabled, valid, and malformed runs and requires identical
+readiness summaries; malformed ownership diagnostics must remain advisory.
+
+Runtime query evidence has decoder, aggregation, deterministic-window,
+resource-bound, unresolved-query, required/optional failure, and fuzz coverage.
+Integration tests prove that observed legacy queries block removal, observed
+destination-only queries do not, and an empty history cannot erase a blocker
+discovered from configured artifacts.
+
+Trace evidence has scoped/quoted attribute extraction, deduplication, mapping,
+strict-manifest, Tempo authentication, parser rejection, timeout, response
+bound, redirect, integration, exact-domain matching, and fuzz coverage. Tests
+prove that legacy OTel attributes block only through an explicit mapping and
+that a missing required mapping is `INCOMPLETE`.
+
 ## Implemented test layers
 
 The current deterministic engine has:
 
 - unit tests for every required migration validation rule;
-- valid YAML fixtures covering all four implemented change kinds;
+- valid YAML fixtures and validation tests covering all implemented metric,
+  label, span-attribute, and resource-attribute change kinds;
 - invalid YAML fixtures with exact golden diagnostics;
 - PromQL AST unit and fuzz tests;
+- CODEOWNERS and strict ownership-metadata unit and fuzz tests;
+- Prometheus query-log and TMR query-history unit and fuzz tests;
+- TraceQL attribute-scanner unit and fuzz tests plus Tempo API component tests;
 - component fixtures for Prometheus rules, PrometheusRule CRDs, Grafana, Sloth,
   and Pyrra;
 - cycle and transitive-chain graph tests;
@@ -18,7 +51,8 @@ The current deterministic engine has:
 - an exact JSON golden report for the checkout migration;
 - CLI integration tests for output and the permanent `0/1/2/3` exit contract;
 - CI checks for formatting, vetting, and race-enabled tests.
-- a pinned live Docker lifecycle against Prometheus, Grafana, and Sloth.
+- pinned live Docker lifecycles against Prometheus, Grafana, and Sloth, plus a
+  digest-pinned Tempo TraceQL validation tier.
 
 Run the local checks with:
 
@@ -69,6 +103,7 @@ Run the core and live layers with:
 ```bash
 go test -race ./...
 ./e2e/scripts/run-e2e.sh
+./e2e/scripts/run-tempo-e2e.sh
 ```
 
 See [the E2E harness guide](../e2e/README.md) for pinned versions, scenario
