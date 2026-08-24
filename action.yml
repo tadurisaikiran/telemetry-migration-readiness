@@ -1,0 +1,94 @@
+name: Telemetry Migration Readiness
+description: Fail closed when critical telemetry consumers have not migrated
+author: Telemetry Migration Readiness contributors
+
+branding:
+  icon: activity
+  color: purple
+
+inputs:
+  config:
+    description: Path to tmr.yaml relative to the repository root
+    required: true
+    default: tmr.yaml
+  migration:
+    description: Path to the migration manifest relative to the repository root
+    required: true
+  comment:
+    description: Create or update a pull-request comment
+    required: false
+    default: "true"
+
+outputs:
+  status:
+    description: READY, BLOCKED, INCOMPLETE, or ERROR
+    value: ${{ steps.analyze.outputs.status }}
+  exit-code:
+    description: TMR process exit code
+    value: ${{ steps.analyze.outputs.exit-code }}
+  report:
+    description: Path to the generated Markdown report
+    value: ${{ steps.analyze.outputs.report }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up official Go
+      uses: actions/setup-go@v6
+      with:
+        go-version-file: ${{ github.action_path }}/go.mod
+        cache-dependency-path: ${{ github.action_path }}/go.sum
+
+    - name: Build TMR
+      shell: bash
+      run: go build -trimpath -o "${RUNNER_TEMP}/tmr" "${GITHUB_ACTION_PATH}/cmd/tmr"
+
+    - name: Analyze migration
+      id: analyze
+      shell: bash
+      env:
+        TMR_CONFIG: ${{ inputs.config }}
+        TMR_MIGRATION: ${{ inputs.migration }}
+      run: "${GITHUB_ACTION_PATH}/action/run-action.sh"
+
+    - name: Post pull-request summary
+      if: always() && github.event_name == 'pull_request' && inputs.comment == 'true'
+      uses: actions/github-script@v8
+      env:
+        TMR_REPORT_PATH: ${{ steps.analyze.outputs.report }}
+      with:
+        github-token: ${{ github.token }}
+        script: |
+          const fs = require('fs');
+          const marker = '<!-- telemetry-migration-readiness -->';
+          const body = `${marker}\n${fs.readFileSync(process.env.TMR_REPORT_PATH, 'utf8')}`;
+          const comments = await github.paginate(github.rest.issues.listComments, {
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            per_page: 100,
+          });
+          const existing = comments.find(comment =>
+            comment.user.type === 'Bot' && comment.body?.includes(marker));
+          if (existing) {
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: existing.id,
+              body,
+            });
+          } else {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+          }
+
+    - name: Enforce readiness result
+      if: always()
+      shell: bash
+      env:
+        TMR_EXIT_CODE: ${{ steps.analyze.outputs.exit-code }}
+      run: exit "${TMR_EXIT_CODE:-1}"

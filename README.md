@@ -55,6 +55,26 @@ The analysis exit-code contract is permanent: `0` means policy passed, `1`
 means a tool/configuration/runtime error, `2` means the migration is blocked,
 and `3` means required evidence is incomplete.
 
+## GitHub Action
+
+```yaml
+permissions:
+  contents: read
+  pull-requests: write
+
+steps:
+  - uses: actions/checkout@v5
+  - uses: tadurisaikiran/telemetry-migration-readiness@v1
+    with:
+      config: tmr.yaml
+      migration: migration.yaml
+```
+
+The Action writes the Markdown report to the job summary and creates or updates
+one pull-request comment by default. See
+[the Action documentation](docs/GITHUB_ACTION.md) for inputs, outputs, and
+permission details.
+
 ## Example manifest
 
 ```yaml
