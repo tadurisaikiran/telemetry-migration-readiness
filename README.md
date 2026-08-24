@@ -127,6 +127,10 @@ For a problem-first explanation of the migration lifecycle, read
 See [the roadmap](docs/ROADMAP.md), [contribution guide](CONTRIBUTING.md), and
 [security policy](SECURITY.md) before proposing or reporting work.
 
+Engineers evaluating a real migration can use the
+[design-user program guide](docs/DESIGN_USER_PROGRAM.md) and submit only
+sanitized findings through the design-user feedback issue form.
+
 ## Development
 
 ```bash

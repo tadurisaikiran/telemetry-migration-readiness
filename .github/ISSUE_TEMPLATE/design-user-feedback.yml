@@ -1,0 +1,95 @@
+name: Design-user feedback
+description: Share a sanitized result from a real or representative migration evaluation
+title: "feedback: "
+labels:
+  - enhancement
+  - "area: testing"
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        This issue is public. Do not include credentials, production endpoints,
+        customer data, proprietary queries, or unredacted telemetry. Construct a
+        synthetic reproduction when the original artifacts cannot be shared.
+  - type: input
+    id: version
+    attributes:
+      label: TMR version or commit
+      placeholder: v0.1.0 or commit SHA
+    validations:
+      required: true
+  - type: dropdown
+    id: change
+    attributes:
+      label: Telemetry change
+      options:
+        - Metric rename
+        - Metric removal
+        - Label rename
+        - Label removal
+        - Multiple changes
+    validations:
+      required: true
+  - type: checkboxes
+    id: consumers
+    attributes:
+      label: Consumer types evaluated
+      options:
+        - label: Prometheus or PrometheusRule recording/alerting rules
+        - label: Grafana dashboards
+        - label: Sloth SLOs
+        - label: Pyrra SLOs
+        - label: Transitive recording-rule consumers
+  - type: dropdown
+    id: expected
+    attributes:
+      label: Expected readiness before running TMR
+      options:
+        - READY
+        - BLOCKED
+        - INCOMPLETE
+        - Unsure
+    validations:
+      required: true
+  - type: dropdown
+    id: actual
+    attributes:
+      label: Actual readiness
+      options:
+        - READY (exit 0)
+        - BLOCKED (exit 2)
+        - INCOMPLETE (exit 3)
+        - Tool or configuration error (exit 1)
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: What was correct, missing, or surprising?
+      description: Include permanent diagnostic codes and sanitized source evidence.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal sanitized reproduction
+      description: Provide or link a synthetic migration, config, and smallest consumer fixture.
+  - type: input
+    id: duration
+    attributes:
+      label: Time to first useful result
+      placeholder: 12 minutes
+  - type: textarea
+    id: friction
+    attributes:
+      label: Workflow friction
+      description: What made installation, configuration, analysis, or explanation harder?
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Public-data confirmation
+      options:
+        - label: This report contains no credentials or sensitive telemetry.
+          required: true
+        - label: I searched existing issues for the same finding.
+          required: true
