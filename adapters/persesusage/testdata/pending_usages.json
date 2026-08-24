@@ -1,0 +1,13 @@
+{
+  "pending_queue_depth": {
+    "dashboards": [
+      {
+        "uid": "pending-queue",
+        "title": "Pending Queue",
+        "url": "https://perses.example.test/projects/checkout/dashboards/pending"
+      }
+    ],
+    "recordingRules": [],
+    "alertRules": []
+  }
+}

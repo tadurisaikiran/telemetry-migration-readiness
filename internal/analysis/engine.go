@@ -5,8 +5,11 @@ package analysis
 import (
 	"context"
 	"fmt"
+	"os"
+	"time"
 
 	"github.com/tadurisaikiran/telemetry-migration-readiness/adapters/grafana"
+	"github.com/tadurisaikiran/telemetry-migration-readiness/adapters/persesusage"
 	"github.com/tadurisaikiran/telemetry-migration-readiness/adapters/prometheusrules"
 	"github.com/tadurisaikiran/telemetry-migration-readiness/adapters/pyrra"
 	"github.com/tadurisaikiran/telemetry-migration-readiness/adapters/sloth"
@@ -59,6 +62,7 @@ func Discover(ctx context.Context, configuration config.Config) (domain.Discover
 		func(ctx context.Context, path string, required bool) (domain.Discovery, error) {
 			return (pyrra.Loader{Required: required}).LoadFile(ctx, path)
 		})
+	loadPersesUsage(ctx, configuration.Sources.PersesUsage, &discovery)
 
 	if err := ctx.Err(); err != nil {
 		return domain.Discovery{}, nil, err
@@ -68,6 +72,55 @@ func Discover(ctx context.Context, configuration config.Config) (domain.Discover
 		return domain.Discovery{}, nil, fmt.Errorf("build dependency graph: %w", err)
 	}
 	return discovery, dependencyGraph, nil
+}
+
+func loadPersesUsage(
+	ctx context.Context,
+	sources []config.PersesUsageSource,
+	discovery *domain.Discovery,
+) {
+	for _, source := range sources {
+		if err := ctx.Err(); err != nil {
+			return
+		}
+		timeout, err := time.ParseDuration(source.Timeout)
+		if err != nil {
+			discovery.Diagnostics = append(discovery.Diagnostics, persesDiagnostic(source, err.Error()))
+			continue
+		}
+		var token string
+		if source.BearerTokenEnv != "" {
+			var exists bool
+			token, exists = os.LookupEnv(source.BearerTokenEnv)
+			if !exists || token == "" {
+				discovery.Diagnostics = append(discovery.Diagnostics, persesDiagnostic(
+					source,
+					fmt.Sprintf("bearer token environment variable %q is unset or empty", source.BearerTokenEnv),
+				))
+				continue
+			}
+		}
+		additional, err := (persesusage.Loader{
+			BaseURL:     source.URL,
+			Required:    source.Required,
+			Timeout:     timeout,
+			BearerToken: token,
+		}).Discover(ctx)
+		if err != nil {
+			discovery.Diagnostics = append(discovery.Diagnostics, persesDiagnostic(source, err.Error()))
+			continue
+		}
+		discovery.Append(additional)
+	}
+}
+
+func persesDiagnostic(source config.PersesUsageSource, message string) domain.Diagnostic {
+	return domain.Diagnostic{
+		Adapter:  "perses_metrics_usage",
+		Source:   domain.SourceLocation{URL: source.URL},
+		Message:  message,
+		Required: source.Required,
+	}
 }
 
 type fileLoader func(context.Context, string, bool) (domain.Discovery, error)

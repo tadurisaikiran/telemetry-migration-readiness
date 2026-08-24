@@ -128,5 +128,6 @@ func sourceCount(configuration config.Config) int {
 	return len(configuration.Sources.PrometheusRules) +
 		len(configuration.Sources.Grafana) +
 		len(configuration.Sources.Sloth) +
-		len(configuration.Sources.Pyrra)
+		len(configuration.Sources.Pyrra) +
+		len(configuration.Sources.PersesUsage)
 }

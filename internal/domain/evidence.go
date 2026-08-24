@@ -8,6 +8,7 @@ const (
 	EvidenceMethodStaticConfig       EvidenceMethod = "static_config"
 	EvidenceMethodGeneratedRule      EvidenceMethod = "generated_rule"
 	EvidenceMethodExplicitMapping    EvidenceMethod = "explicit_mapping"
+	EvidenceMethodUsageAPI           EvidenceMethod = "usage_api"
 	EvidenceMethodRuntimeQuery       EvidenceMethod = "runtime_query"
 	EvidenceMethodTemplateResolution EvidenceMethod = "template_resolution"
 	EvidenceMethodAIInference        EvidenceMethod = "ai_inference"

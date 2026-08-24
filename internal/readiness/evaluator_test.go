@@ -73,6 +73,72 @@ func TestEvaluateRequiredDiagnosticIsIncomplete(t *testing.T) {
 	}
 }
 
+func TestEvaluateScopesMissingLabelEvidenceToLabelChanges(t *testing.T) {
+	t.Parallel()
+
+	metric := domain.Symbol{
+		Domain: domain.DomainPrometheus,
+		Kind:   domain.SymbolKindMetric,
+		Name:   "checkout_server_request_duration_seconds_count",
+	}
+	discovery := domain.Discovery{
+		Consumers: []domain.Consumer{{
+			ID:          "remote-dashboard",
+			Kind:        domain.ConsumerKindDashboard,
+			Name:        "Remote dashboard",
+			Criticality: domain.CriticalityCritical,
+		}},
+		References: []domain.Reference{
+			{ConsumerID: "remote-dashboard", Symbol: metric},
+			{
+				ConsumerID:         "remote-dashboard",
+				Symbol:             metric,
+				RequiresResolution: true,
+				ResolutionScope:    domain.ResolutionScopeLabels,
+			},
+		},
+	}
+
+	metricResult := evaluateForTest(t, metricRenameMigration(), discovery)
+	if got, want := metricResult.Summary.Status, StatusReady; got != want {
+		t.Fatalf("metric status = %q, want %q", got, want)
+	}
+	if got := findConsumerResult(t, metricResult, "remote-dashboard").Classification; got != ClassificationMigrated {
+		t.Fatalf("metric classification = %q, want MIGRATED", got)
+	}
+
+	labelDestination := domain.Symbol{
+		Domain: domain.DomainPrometheus,
+		Kind:   domain.SymbolKindLabel,
+		Name:   "http_request_method",
+		Parent: "checkout_server_request_duration_seconds",
+	}
+	labelMigration := domain.Migration{
+		APIVersion: domain.MigrationAPIVersion,
+		Kind:       domain.MigrationKind,
+		Metadata:   domain.MigrationMetadata{Name: "labels"},
+		Changes: []domain.Change{{
+			ID:     "method",
+			Kind:   domain.ChangeKindLabelRename,
+			Domain: domain.DomainPrometheus,
+			From: domain.Symbol{
+				Domain: domain.DomainPrometheus,
+				Kind:   domain.SymbolKindLabel,
+				Name:   "http_method",
+				Parent: "checkout_server_request_duration_seconds",
+			},
+			To: &labelDestination,
+		}},
+	}
+	labelResult := evaluateForTest(t, labelMigration, discovery)
+	if got, want := labelResult.Summary.Status, StatusIncomplete; got != want {
+		t.Fatalf("label status = %q, want %q", got, want)
+	}
+	if got := findConsumerResult(t, labelResult, "remote-dashboard").Classification; got != ClassificationUncertain {
+		t.Fatalf("label classification = %q, want UNCERTAIN", got)
+	}
+}
+
 func TestEvaluateMetricRemovalBlocksReference(t *testing.T) {
 	t.Parallel()
 

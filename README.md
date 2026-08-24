@@ -11,9 +11,10 @@ those migrations before backward compatibility is removed.
 
 ## Current status
 
-The deterministic Prometheus v0.1 engine is implemented through the reporting
-milestone. It works entirely from local files and does not require AI, a
-database, a network connection, or a hosted service.
+The deterministic Prometheus v0.1 engine is implemented through the ecosystem
+integration milestones. Its local adapters do not require AI, a database, a
+network connection, or a hosted service; remote evidence sources are explicit
+and optional.
 
 Implemented:
 
@@ -29,6 +30,8 @@ Implemented:
 - `analyze`, `validate`, `explain`, and `graph` CLI commands.
 - Optional OpenTelemetry Weaver V1/V2 registry-diff import with mandatory,
   explicit Prometheus backend mappings.
+- Optional Perses metrics-usage HTTP evidence for dashboards, recording rules,
+  alert rules, partial metrics, and pending usage.
 - A pinned live Prometheus/Grafana/Sloth migration lifecycle that verifies
   predictions against runtime behavior.
 
@@ -124,6 +127,23 @@ tmr analyze \
 
 TMR never assumes that an OpenTelemetry identifier maps directly to a
 Prometheus name. See [the Weaver integration guide](docs/WEAVER.md).
+
+## Perses metrics-usage evidence
+
+TMR can augment local discovery from a separately deployed Perses
+metrics-usage service:
+
+```yaml
+sources:
+  persesUsage:
+    - url: https://metrics-usage.example.com
+      required: true
+      timeout: 10s
+      bearerTokenEnv: TMR_PERSES_TOKEN
+```
+
+The adapter consumes the documented API only; Perses is not a TMR dependency.
+See [the Perses metrics-usage integration guide](docs/PERSES.md).
 
 ## Design principles
 

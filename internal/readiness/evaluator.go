@@ -122,7 +122,7 @@ func Evaluate(
 		for _, consumer := range consumers {
 			oldPaths, hasOld := oldImpact[consumer.ID]
 			newPaths, hasNew := newImpact[consumer.ID]
-			uncertain := consumer.Unresolved || consumerHasUnresolvedReference(discovery.References, consumer.ID)
+			uncertain := consumer.Unresolved || consumerHasUnresolvedReference(discovery.References, consumer.ID, change)
 			classification := classify(change, hasOld, hasNew, uncertain)
 			global[consumer.ID] = worseClassification(global[consumer.ID], classification)
 			consumerResults = append(consumerResults, ConsumerResult{
@@ -218,9 +218,9 @@ func classify(change domain.Change, hasOld, hasNew, uncertain bool) Classificati
 	return ClassificationUnaffected
 }
 
-func consumerHasUnresolvedReference(references []domain.Reference, consumerID string) bool {
+func consumerHasUnresolvedReference(references []domain.Reference, consumerID string, change domain.Change) bool {
 	for _, reference := range references {
-		if reference.ConsumerID == consumerID && reference.RequiresResolution {
+		if reference.ConsumerID == consumerID && unresolvedReferenceApplies(reference, change) {
 			return true
 		}
 	}
@@ -237,11 +237,29 @@ func referencesForConsumerAndChange(
 		if reference.ConsumerID != consumerID {
 			continue
 		}
-		if symbolsMatch(reference.Symbol, change.From) || (change.To != nil && symbolsMatch(reference.Symbol, *change.To)) || reference.RequiresResolution {
+		if symbolsMatch(reference.Symbol, change.From) ||
+			(change.To != nil && symbolsMatch(reference.Symbol, *change.To)) ||
+			unresolvedReferenceApplies(reference, change) {
 			result = append(result, reference)
 		}
 	}
 	return result
+}
+
+func unresolvedReferenceApplies(reference domain.Reference, change domain.Change) bool {
+	if !reference.RequiresResolution {
+		return false
+	}
+	if reference.ResolutionScope != domain.ResolutionScopeLabels {
+		return true
+	}
+	if change.From.Kind != domain.SymbolKindLabel || reference.Symbol.Kind != domain.SymbolKindMetric {
+		return false
+	}
+	if metricFamilyMatch(reference.Symbol.Name, change.From.Parent) {
+		return true
+	}
+	return change.To != nil && metricFamilyMatch(reference.Symbol.Name, change.To.Parent)
 }
 
 func statusForConsumers(results []ConsumerResult, diagnostics []domain.Diagnostic, policy Policy) Status {

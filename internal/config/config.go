@@ -6,8 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
+	"regexp"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -23,12 +26,22 @@ type SourcePattern struct {
 	Required bool   `json:"required"`
 }
 
-// Sources configures the implemented local consumer adapters.
+// PersesUsageSource configures one optional Perses metrics-usage API.
+// Secrets are referenced by environment-variable name and never stored here.
+type PersesUsageSource struct {
+	URL            string `json:"url"`
+	Required       bool   `json:"required"`
+	Timeout        string `json:"timeout"`
+	BearerTokenEnv string `json:"bearerTokenEnv,omitempty"`
+}
+
+// Sources configures implemented local and optional remote consumer adapters.
 type Sources struct {
-	PrometheusRules []SourcePattern `json:"prometheusRules,omitempty"`
-	Grafana         []SourcePattern `json:"grafana,omitempty"`
-	Sloth           []SourcePattern `json:"sloth,omitempty"`
-	Pyrra           []SourcePattern `json:"pyrra,omitempty"`
+	PrometheusRules []SourcePattern     `json:"prometheusRules,omitempty"`
+	Grafana         []SourcePattern     `json:"grafana,omitempty"`
+	Sloth           []SourcePattern     `json:"sloth,omitempty"`
+	Pyrra           []SourcePattern     `json:"pyrra,omitempty"`
+	PersesUsage     []PersesUsageSource `json:"persesUsage,omitempty"`
 }
 
 // AnalysisConfig controls graph behavior.
@@ -67,10 +80,18 @@ type configDocument struct {
 }
 
 type sourcesDocument struct {
-	PrometheusRules []sourcePatternDocument `yaml:"prometheusRules"`
-	Grafana         []sourcePatternDocument `yaml:"grafana"`
-	Sloth           []sourcePatternDocument `yaml:"sloth"`
-	Pyrra           []sourcePatternDocument `yaml:"pyrra"`
+	PrometheusRules []sourcePatternDocument     `yaml:"prometheusRules"`
+	Grafana         []sourcePatternDocument     `yaml:"grafana"`
+	Sloth           []sourcePatternDocument     `yaml:"sloth"`
+	Pyrra           []sourcePatternDocument     `yaml:"pyrra"`
+	PersesUsage     []persesUsageSourceDocument `yaml:"persesUsage"`
+}
+
+type persesUsageSourceDocument struct {
+	URL            string `yaml:"url"`
+	Required       *bool  `yaml:"required"`
+	Timeout        string `yaml:"timeout"`
+	BearerTokenEnv string `yaml:"bearerTokenEnv"`
 }
 
 type sourcePatternDocument struct {
@@ -193,6 +214,30 @@ func ValidateConfig(config Config) error {
 	validateSourcePatterns("sources.grafana", config.Sources.Grafana)
 	validateSourcePatterns("sources.sloth", config.Sources.Sloth)
 	validateSourcePatterns("sources.pyrra", config.Sources.Pyrra)
+	totalSources += len(config.Sources.PersesUsage)
+	for index, source := range config.Sources.PersesUsage {
+		path := fmt.Sprintf("sources.persesUsage[%d]", index)
+		parsed, err := url.Parse(source.URL)
+		if err != nil ||
+			(!strings.EqualFold(parsed.Scheme, "http") && !strings.EqualFold(parsed.Scheme, "https")) ||
+			parsed.Host == "" {
+			issues.add(path+".url", "must be an absolute http or https URL")
+		} else {
+			if parsed.User != nil {
+				issues.add(path+".url", "must not contain user information")
+			}
+			if parsed.RawQuery != "" || parsed.Fragment != "" {
+				issues.add(path+".url", "must not contain a query or fragment")
+			}
+		}
+		timeout, err := time.ParseDuration(source.Timeout)
+		if err != nil || timeout <= 0 || timeout > 2*time.Minute {
+			issues.add(path+".timeout", "must be a positive duration no greater than 2m")
+		}
+		if source.BearerTokenEnv != "" && !environmentNamePattern.MatchString(source.BearerTokenEnv) {
+			issues.add(path+".bearerTokenEnv", "must be a valid environment variable name")
+		}
+	}
 	if totalSources == 0 {
 		issues.add("sources", "must configure at least one consumer source")
 	}
@@ -252,6 +297,7 @@ func normalizeConfig(document configDocument) Config {
 			Grafana:         normalizePatterns(document.Sources.Grafana),
 			Sloth:           normalizePatterns(document.Sources.Sloth),
 			Pyrra:           normalizePatterns(document.Sources.Pyrra),
+			PersesUsage:     normalizePersesUsageSources(document.Sources.PersesUsage),
 		},
 		Analysis: AnalysisConfig{
 			IncludeTransitiveDependencies: transitive,
@@ -264,6 +310,29 @@ func normalizeConfig(document configDocument) Config {
 		},
 		Output: OutputConfig{Formats: formats},
 	}
+}
+
+var environmentNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+func normalizePersesUsageSources(documents []persesUsageSourceDocument) []PersesUsageSource {
+	sources := make([]PersesUsageSource, 0, len(documents))
+	for _, document := range documents {
+		required := true
+		if document.Required != nil {
+			required = *document.Required
+		}
+		timeout := strings.TrimSpace(document.Timeout)
+		if timeout == "" {
+			timeout = "10s"
+		}
+		sources = append(sources, PersesUsageSource{
+			URL:            strings.TrimRight(strings.TrimSpace(document.URL), "/"),
+			Required:       required,
+			Timeout:        timeout,
+			BearerTokenEnv: strings.TrimSpace(document.BearerTokenEnv),
+		})
+	}
+	return sources
 }
 
 func normalizePatterns(documents []sourcePatternDocument) []SourcePattern {

@@ -13,6 +13,8 @@ deployment is supported.
 - Fail-closed readiness and versioned reports (Milestones 7–8).
 - GitHub Action packaging (Milestone 9).
 - Weaver registry-diff import with explicit backend mappings (Milestone 10).
+- Perses metrics-usage evidence through a bounded, fail-closed HTTP adapter
+  (Milestone 11).
 - Pinned live Prometheus/Grafana/Sloth migration lifecycle.
 
 ## Current release path
@@ -24,7 +26,6 @@ deployment is supported.
 
 ## Optional integrations after the core release gate
 
-- Perses metrics-usage evidence.
 - Read-only AI explanation followed by deterministically validated candidate
   remediation.
 - CODEOWNERS, repository metadata, and dashboard ownership inference.

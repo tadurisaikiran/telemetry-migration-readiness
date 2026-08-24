@@ -46,3 +46,49 @@ sources:
 		t.Fatal("ParseConfig() error = nil, want unknown-field error")
 	}
 }
+
+func TestParseConfigSupportsPersesUsageSource(t *testing.T) {
+	t.Parallel()
+
+	configuration, err := ParseConfig(strings.NewReader(`apiVersion: tmr/v1alpha1
+sources:
+  persesUsage:
+    - url: https://metrics-usage.example.test/base/
+      bearerTokenEnv: TMR_PERSES_TOKEN
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := len(configuration.Sources.PersesUsage), 1; got != want {
+		t.Fatalf("PersesUsage sources = %d, want %d", got, want)
+	}
+	source := configuration.Sources.PersesUsage[0]
+	if source.URL != "https://metrics-usage.example.test/base" || !source.Required || source.Timeout != "10s" {
+		t.Fatalf("source = %#v", source)
+	}
+}
+
+func TestParseConfigRejectsUnsafePersesUsageSource(t *testing.T) {
+	t.Parallel()
+
+	_, err := ParseConfig(strings.NewReader(`apiVersion: tmr/v1alpha1
+sources:
+  persesUsage:
+    - url: https://user:password@metrics-usage.example.test/api?token=secret
+      timeout: 3m
+      bearerTokenEnv: NOT-A-NAME
+`))
+	if err == nil {
+		t.Fatal("ParseConfig() error = nil")
+	}
+	for _, expected := range []string{
+		"must not contain user information",
+		"must not contain a query or fragment",
+		"must be a positive duration no greater than 2m",
+		"must be a valid environment variable name",
+	} {
+		if !strings.Contains(err.Error(), expected) {
+			t.Errorf("error = %q, want %q", err, expected)
+		}
+	}
+}

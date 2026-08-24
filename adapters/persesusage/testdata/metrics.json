@@ -1,0 +1,52 @@
+{
+  "checkout_request_duration_seconds": {
+    "labels": ["service", "route"],
+    "usage": {
+      "dashboards": [
+        {
+          "id": "legacy-checkout-overview",
+          "name": "Legacy Checkout Overview",
+          "url": "https://perses.example.test/projects/checkout/dashboards/legacy"
+        }
+      ],
+      "recordingRules": [],
+      "alertRules": []
+    }
+  },
+  "checkout_request_duration_seconds_count": {
+    "labels": ["service", "route"],
+    "usage": {
+      "dashboards": [
+        {
+          "uid": "checkout-latency",
+          "title": "Checkout Latency",
+          "url": "https://perses.example.test/projects/checkout/dashboards/latency"
+        }
+      ],
+      "recordingRules": [
+        {
+          "prom_link": "https://prometheus.example.test/rules",
+          "group_name": "checkout",
+          "name": "checkout:requests:rate1m",
+          "expression": "sum by (service) (rate(checkout_request_duration_seconds_count{service=\"checkout\"}[1m]))"
+        }
+      ],
+      "alertRules": []
+    }
+  },
+  "checkout:requests:rate1m": {
+    "labels": ["service"],
+    "usage": {
+      "dashboards": [],
+      "recordingRules": [],
+      "alertRules": [
+        {
+          "prom_link": "https://prometheus.example.test/rules",
+          "group_name": "checkout",
+          "name": "CheckoutTrafficStopped",
+          "expression": "checkout:requests:rate1m{service=\"checkout\"} == 0"
+        }
+      ]
+    }
+  }
+}

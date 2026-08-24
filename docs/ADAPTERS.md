@@ -20,8 +20,21 @@ Every configured source can be marked `required`. A load, parse, or expansion
 failure on a required source prevents `READY`. All adapters preserve file,
 line, expression, extraction method, and confidence where available.
 
-Remote and ecosystem integrations are optional additions. They must add
-evidence without becoming prerequisites for the local deterministic core.
+## Remote evidence adapters
+
+- `persesusage` calls a configured Perses metrics-usage service and normalizes
+  its exact, partial, and pending usage into dashboards, alert rules, recording
+  rules, references, and productions. Rule expressions are parsed again with
+  TMR's official PromQL AST walker. Dashboard label usage remains explicitly
+  unresolved because the API association does not carry dashboard query text.
+
+The adapter has bounded response sizes, a source timeout, optional bearer-token
+authentication by environment variable, and same-origin redirects only. A
+failed required endpoint prevents `READY`; optional-source failures remain
+visible diagnostics. See [the Perses integration guide](PERSES.md).
+
+Remote and ecosystem integrations add evidence without becoming prerequisites
+for the local deterministic core.
 
 ## Change adapters
 

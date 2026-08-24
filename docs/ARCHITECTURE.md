@@ -28,7 +28,7 @@ The local deterministic pipeline described below is implemented today.
 explicit migration or mapped Weaver diff + source configuration
              |
              v
-strict validation and local adapters
+strict validation and local/remote evidence adapters
              |
              v
 official PromQL AST reference extraction
@@ -62,6 +62,13 @@ The consumer adapters normalize Prometheus rule YAML, PrometheusRule CRDs, Grafa
 dashboard JSON, Sloth SLO YAML, and Pyrra SLO YAML. Malformed or unresolved
 required input becomes a diagnostic rather than evidence of absence.
 
+`adapters/persesusage` is an optional remote evidence boundary around the
+Perses metrics-usage HTTP API. It imports usage associations, then independently
+parses returned rule expressions and models recording-rule productions. It
+does not import Perses packages or allow remote data to decide readiness.
+Missing dashboard query details and partial metric names remain scoped,
+unresolved evidence.
+
 `pkg/promql` uses Prometheus's official parser and walks the typed AST. It does
 not use substring matching to establish metric or label dependencies.
 
@@ -79,7 +86,7 @@ establish safety.
 
 - OpenTelemetry, trace, and log analysis.
 - AI explanation or remediation.
-- Runtime evidence, APIs, MCP, and server/UI modes.
+- Additional runtime query evidence, APIs, MCP, and server/UI modes.
 - Additional live end-to-end tiers described in `TESTING.md`.
 
 These remain adapters or optional consumers of the deterministic engine. None
