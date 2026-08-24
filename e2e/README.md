@@ -20,6 +20,8 @@ Run it from the repository root with Docker Compose v2:
 The script builds `tmr`, independently runs `promtool check rules` for every
 scenario, runs `promtool test rules`, validates and generates the Sloth spec,
 then starts and queries the stack for each lifecycle stage.
+For every migration stage it also requires the explicit migration manifest and
+the mapped Weaver V2 diff to produce the same status and exit code.
 
 | Scenario | Exporter | Consumers | Expected TMR | Runtime |
 | --- | --- | --- | --- | --- |

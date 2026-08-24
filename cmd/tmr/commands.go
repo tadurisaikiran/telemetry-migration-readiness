@@ -3,12 +3,14 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 
+	weaveradapter "github.com/tadurisaikiran/telemetry-migration-readiness/adapters/weaver"
 	"github.com/tadurisaikiran/telemetry-migration-readiness/internal/analysis"
 	"github.com/tadurisaikiran/telemetry-migration-readiness/internal/config"
 	"github.com/tadurisaikiran/telemetry-migration-readiness/internal/domain"
@@ -22,13 +24,23 @@ func runAnalyze(ctx context.Context, args []string, stdout, stderr io.Writer) in
 	flags.SetOutput(stderr)
 	configPath := flags.String("config", "", "path to a TMR YAML configuration")
 	migrationPath := flags.String("migration", "", "path to a migration YAML manifest")
+	weaverDiffPath := flags.String("weaver-diff", "", "path to a Weaver registry diff JSON document")
+	weaverMappingPath := flags.String("weaver-mapping", "", "path to an explicit Weaver backend mapping")
 	format := flags.String("format", "", "report format: console, json, or markdown")
 	output := flags.String("output", "", "optional report output path")
 	if err := flags.Parse(args); err != nil {
 		return flagExitCode(err)
 	}
-	if flags.NArg() != 0 || *configPath == "" || *migrationPath == "" {
-		fmt.Fprintln(stderr, "analyze requires --config and --migration and accepts no positional arguments")
+	if flags.NArg() != 0 || *configPath == "" {
+		fmt.Fprintln(stderr, "analyze requires --config and one change source and accepts no positional arguments")
+		return 1
+	}
+	if *migrationPath != "" && (*weaverDiffPath != "" || *weaverMappingPath != "") {
+		fmt.Fprintln(stderr, "--migration and --weaver-diff/--weaver-mapping are mutually exclusive")
+		return 1
+	}
+	if *migrationPath == "" && (*weaverDiffPath == "" || *weaverMappingPath == "") {
+		fmt.Fprintln(stderr, "analyze requires --migration or both --weaver-diff and --weaver-mapping")
 		return 1
 	}
 
@@ -37,9 +49,12 @@ func runAnalyze(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		fmt.Fprintf(stderr, "Error: %v\n", err)
 		return 1
 	}
-	migration, err := config.LoadMigration(ctx, *migrationPath)
+	migration, err := loadSelectedMigration(ctx, *migrationPath, *weaverDiffPath, *weaverMappingPath)
 	if err != nil {
 		fmt.Fprintf(stderr, "Error: %v\n", err)
+		if isWeaverIncomplete(err) {
+			return 3
+		}
 		return 1
 	}
 	result, _, _, err := analysis.Run(ctx, configuration, migration)
@@ -62,6 +77,27 @@ func runAnalyze(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		return 1
 	}
 	return readinessExitCode(result.Summary.Status)
+}
+
+func loadSelectedMigration(ctx context.Context, migrationPath, weaverDiffPath, weaverMappingPath string) (domain.Migration, error) {
+	if migrationPath != "" {
+		return config.LoadMigration(ctx, migrationPath)
+	}
+	return loadWeaverMigration(ctx, weaverDiffPath, weaverMappingPath)
+}
+
+func loadWeaverMigration(ctx context.Context, diffPath, mappingPath string) (domain.Migration, error) {
+	migration, _, err := weaveradapter.LoadMigration(ctx, diffPath, mappingPath)
+	return migration, err
+}
+
+func isWeaverIncomplete(err error) bool {
+	var target *weaveradapter.MappingRequiredError
+	if errors.As(err, &target) {
+		return true
+	}
+	var unsupported *weaveradapter.UnsupportedChangeError
+	return errors.As(err, &unsupported)
 }
 
 func runGraph(ctx context.Context, args []string, stdout, stderr io.Writer) int {

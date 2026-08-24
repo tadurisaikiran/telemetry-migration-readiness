@@ -14,8 +14,9 @@ import (
 const usageText = `Telemetry Migration Readiness
 
 Usage:
-  tmr analyze --config <path> --migration <path> [--format console|json|markdown]
+  tmr analyze --config <path> (--migration <path> | --weaver-diff <path> --weaver-mapping <path>) [--format console|json|markdown]
   tmr validate --migration <path>
+  tmr validate --weaver-diff <path> --weaver-mapping <path>
   tmr validate --config <path>
   tmr explain --config <path> --symbol <metric>
   tmr graph --config <path> [--output <path>]
@@ -59,11 +60,13 @@ func runValidate(ctx context.Context, args []string, stdout, stderr io.Writer) i
 	flags := flag.NewFlagSet("validate", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.Usage = func() {
-		fmt.Fprintln(stderr, "Usage: tmr validate --migration <path>")
+		fmt.Fprintln(stderr, "Usage: tmr validate (--migration <path> | --weaver-diff <path> --weaver-mapping <path> | --config <path>)")
 		flags.PrintDefaults()
 	}
 
 	migrationPath := flags.String("migration", "", "path to a migration YAML manifest")
+	weaverDiffPath := flags.String("weaver-diff", "", "path to a Weaver registry diff JSON document")
+	weaverMappingPath := flags.String("weaver-mapping", "", "path to an explicit Weaver backend mapping")
 	configPath := flags.String("config", "", "path to a TMR YAML configuration")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -75,8 +78,16 @@ func runValidate(ctx context.Context, args []string, stdout, stderr io.Writer) i
 		fmt.Fprintf(stderr, "validate does not accept positional arguments: %v\n", flags.Args())
 		return 1
 	}
-	if *migrationPath == "" && *configPath == "" {
-		fmt.Fprintln(stderr, "--migration or --config is required")
+	if *migrationPath == "" && *configPath == "" && *weaverDiffPath == "" && *weaverMappingPath == "" {
+		fmt.Fprintln(stderr, "--migration, --weaver-diff with --weaver-mapping, or --config is required")
+		return 1
+	}
+	if *migrationPath != "" && (*weaverDiffPath != "" || *weaverMappingPath != "") {
+		fmt.Fprintln(stderr, "--migration and --weaver-diff/--weaver-mapping are mutually exclusive")
+		return 1
+	}
+	if (*weaverDiffPath == "") != (*weaverMappingPath == "") {
+		fmt.Fprintln(stderr, "--weaver-diff and --weaver-mapping must be provided together")
 		return 1
 	}
 
@@ -87,6 +98,18 @@ func runValidate(ctx context.Context, args []string, stdout, stderr io.Writer) i
 			return 1
 		}
 		fmt.Fprintln(stdout, "Migration manifest is valid.")
+		fmt.Fprintf(stdout, "Changes: %d\n", len(migration.Changes))
+	}
+	if *weaverDiffPath != "" {
+		migration, err := loadWeaverMigration(ctx, *weaverDiffPath, *weaverMappingPath)
+		if err != nil {
+			fmt.Fprintf(stderr, "Error: %v\n", err)
+			if isWeaverIncomplete(err) {
+				return 3
+			}
+			return 1
+		}
+		fmt.Fprintln(stdout, "Weaver diff and mapping are valid.")
 		fmt.Fprintf(stdout, "Changes: %d\n", len(migration.Changes))
 	}
 	if *configPath != "" {

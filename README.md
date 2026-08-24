@@ -27,6 +27,8 @@ Implemented:
 - Fail-closed `READY`, `BLOCKED`, and `INCOMPLETE` decisions.
 - Console, versioned JSON, Markdown, and graph JSON output.
 - `analyze`, `validate`, `explain`, and `graph` CLI commands.
+- Optional OpenTelemetry Weaver V1/V2 registry-diff import with mandatory,
+  explicit Prometheus backend mappings.
 - A pinned live Prometheus/Grafana/Sloth migration lifecycle that verifies
   predictions against runtime behavior.
 
@@ -107,6 +109,21 @@ spec:
 
 See [the migration model](docs/MIGRATION_MODEL.md) for the complete implemented
 schema and validation rules.
+
+## Weaver registry diffs
+
+Weaver can be used as an alternative change source when an explicit backend
+mapping is available:
+
+```bash
+tmr analyze \
+  --config ./tmr.yaml \
+  --weaver-diff ./weaver-diff.json \
+  --weaver-mapping ./weaver-mapping.yaml
+```
+
+TMR never assumes that an OpenTelemetry identifier maps directly to a
+Prometheus name. See [the Weaver integration guide](docs/WEAVER.md).
 
 ## Design principles
 

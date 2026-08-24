@@ -25,7 +25,7 @@ The local deterministic pipeline described below is implemented today.
 ## Implemented deterministic pipeline
 
 ```text
-migration + source configuration
+explicit migration or mapped Weaver diff + source configuration
              |
              v
 strict validation and local adapters
@@ -43,7 +43,8 @@ deterministic impact + readiness policy
 console / JSON / Markdown reports
 ```
 
-`internal/config` owns YAML-specific document structs. It rejects unknown
+`internal/config` owns YAML-specific migration and configuration document
+structs. It rejects unknown
 fields, multiple YAML documents, oversized input, and invalid change shapes.
 It then normalizes the document into `internal/domain` and applies reusable
 domain validation.
@@ -52,7 +53,12 @@ domain validation.
 references, evidence, productions, diagnostics, source locations, and owners.
 Adapter-specific document shapes never leak into this package.
 
-`adapters` normalizes Prometheus rule YAML, PrometheusRule CRDs, Grafana
+`adapters/weaver` consumes current structured Weaver V1/V2 registry diffs and
+requires explicit OpenTelemetry-to-Prometheus mappings. Missing mappings stop
+the pipeline before readiness evaluation. It neither invokes Weaver nor infers
+backend names.
+
+The consumer adapters normalize Prometheus rule YAML, PrometheusRule CRDs, Grafana
 dashboard JSON, Sloth SLO YAML, and Pyrra SLO YAML. Malformed or unresolved
 required input becomes a diagnostic rather than evidence of absence.
 
@@ -74,7 +80,7 @@ establish safety.
 - OpenTelemetry, trace, and log analysis.
 - AI explanation or remediation.
 - Runtime evidence, APIs, MCP, and server/UI modes.
-- The live end-to-end stack described in `TESTING.md`.
+- Additional live end-to-end tiers described in `TESTING.md`.
 
 These remain adapters or optional consumers of the deterministic engine. None
 may weaken or override its readiness result.

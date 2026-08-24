@@ -22,3 +22,13 @@ line, expression, extraction method, and confidence where available.
 
 Remote and ecosystem integrations are optional additions. They must add
 evidence without becoming prerequisites for the local deterministic core.
+
+## Change adapters
+
+- `weaver` reads current V1 and V2 `weaver registry diff` JSON. Every
+  actionable metric or registry-attribute change requires an exact explicit
+  Prometheus mapping or a documented ignore decision. Missing mappings produce
+  `requiresMapping=true` and prevent readiness evaluation.
+
+Weaver is never invoked by TMR and OpenTelemetry names are never inferred to be
+Prometheus names. See [the Weaver integration guide](WEAVER.md).

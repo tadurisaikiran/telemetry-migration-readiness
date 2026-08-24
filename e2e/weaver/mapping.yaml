@@ -1,0 +1,32 @@
+apiVersion: tmr.weaver/v1alpha1
+kind: WeaverMapping
+metadata:
+  name: checkout-http-migration
+spec:
+  mappings:
+    - id: checkout-method
+      weaver:
+        kind: attribute
+        type: renamed
+        from: http.method
+        to: http.request.method
+      prometheus:
+        kind: label_rename
+        metric: checkout_server_request_duration_seconds
+        from:
+          label: http_method
+        to:
+          label: http_request_method
+
+    - id: checkout-duration
+      weaver:
+        kind: metric
+        type: renamed
+        from: http.server.duration
+        to: http.server.request.duration
+      prometheus:
+        kind: metric_rename
+        from:
+          metric: checkout_request_duration_seconds
+        to:
+          metric: checkout_server_request_duration_seconds

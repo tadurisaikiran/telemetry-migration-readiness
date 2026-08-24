@@ -45,8 +45,11 @@ jobs:
       - name: Test with race detector
         run: go test -race ./...
 
-      - name: PromQL fuzz smoke test
-        run: go test ./pkg/promql -run=^$ -fuzz=FuzzAnalyze -fuzztime=5s
+      - name: Parser fuzz smoke tests
+        run: |
+          go test ./pkg/promql -run=^$ -fuzz=FuzzAnalyze -fuzztime=5s
+          go test ./adapters/weaver -run=^$ -fuzz=FuzzParseDiffDoesNotPanic -fuzztime=3s
+          go test ./adapters/weaver -run=^$ -fuzz=FuzzParseMappingDoesNotPanic -fuzztime=3s
 
       - name: Check reachable Go vulnerabilities
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
